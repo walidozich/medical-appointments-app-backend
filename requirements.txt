@@ -1,0 +1,55 @@
+# -----------------------------
+# FastAPI Framework
+# -----------------------------
+fastapi
+uvicorn[standard]
+
+# -----------------------------
+# Database / ORM
+# -----------------------------
+sqlalchemy
+psycopg2-binary
+alembic
+
+# -----------------------------
+# Pydantic (models & validation)
+# -----------------------------
+pydantic
+pydantic-settings
+
+# -----------------------------
+# Authentication & Security
+# -----------------------------
+python-jose[cryptography]
+passlib[bcrypt]
+
+# -----------------------------
+# Environment Variables
+# -----------------------------
+python-dotenv
+
+# -----------------------------
+# Cache / Message Broker
+# -----------------------------
+redis
+
+# -----------------------------
+# Async utilities
+# -----------------------------
+httpx
+aiofiles
+
+# -----------------------------
+# Optional / Recommended
+# -----------------------------
+python-multipart
+bcrypt
+email-validator
+
+# -----------------------------
+# Development & Testing
+# -----------------------------
+pytest
+pytest-asyncio
+ruff
+mypy
