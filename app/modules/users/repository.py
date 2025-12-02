@@ -17,3 +17,15 @@ def create_user(db: Session, *, email: str, password_hash: str):
     db.commit()
     db.refresh(user)
     return user
+
+def get_users(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(user_models.User).offset(skip).limit(limit).all()
+
+def update_user(db: Session, user: user_models.User, user_in: dict):
+    for field, value in user_in.items():
+        if value is not None:
+            setattr(user, field, value)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user

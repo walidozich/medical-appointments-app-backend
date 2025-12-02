@@ -2,16 +2,18 @@ from collections.abc import Generator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.modules.users.models import User
 from app.core import security
-from app.modules.auth import repository as auth_repository
+from app.modules.users import repository as users_repository
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+reusable_oauth2 = HTTPBearer(
+    scheme_name="Bearer"
+)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -24,7 +26,7 @@ def get_db() -> Generator[Session, None, None]:
 
 async def get_current_user(
     db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme),
+    token: HTTPAuthorizationCredentials = Depends(reusable_oauth2),
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -32,13 +34,13 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = security.decode_token(token)
+        payload = security.decode_token(token.credentials)
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user = auth_repository.get_by_id(db, user_id=user_id)
+    user = users_repository.get_by_id(db, user_id=user_id)
     if user is None:
         raise credentials_exception
     return user

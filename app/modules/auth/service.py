@@ -2,18 +2,18 @@ from typing import Tuple
 from sqlalchemy.orm import Session
 from jose import JWTError
 
-from app.modules.auth import repository
+from app.modules.users import repository as users_repository
 from app.core import security
 from app.core.security import verify_password, get_password_hash, decode_token
 
 
 def register_user(db: Session, email: str, password: str) -> Tuple[object, dict]:
-    existing = repository.get_by_email(db, email=email)
+    existing = users_repository.get_by_email(db, email=email)
     if existing:
         raise ValueError("Email already registered")
 
     hashed = get_password_hash(password)
-    user = repository.create_user(db, email=email, password_hash=hashed)
+    user = users_repository.create_user(db, email=email, password_hash=hashed)
 
     access = security.create_access_token(subject=str(user.id))
     refresh = security.create_refresh_token(subject=str(user.id))
@@ -22,7 +22,7 @@ def register_user(db: Session, email: str, password: str) -> Tuple[object, dict]
 
 
 def authenticate_user(db: Session, email: str, password: str) -> Tuple[object, dict]:
-    user = repository.get_by_email(db, email=email)
+    user = users_repository.get_by_email(db, email=email)
     if not user:
         raise ValueError("Invalid credentials")
     if not verify_password(password, user.password_hash):

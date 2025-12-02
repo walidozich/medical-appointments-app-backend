@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
 from app.modules.auth import schemas, service
+from app.modules.users.schemas import UserRead
 
 router = APIRouter()
 
 
-@router.post("/register", response_model=schemas.UserRead)
+@router.post("/register", response_model=UserRead)
 def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
     try:
         user, tokens = service.register_user(db, email=payload.email, password=payload.password)
@@ -23,7 +24,14 @@ def login(payload: schemas.UserLogin, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
-    return schemas.Token(access_token=tokens["access_token"], refresh_token=tokens["refresh_token"]) 
+    return schemas.Token(access_token=tokens["access_token"], refresh_token=tokens["refresh_token"])
+
+@router.post("/logout")
+def logout():
+    """
+    Logout user.
+    """
+    return {"message": "Successfully logged out"}
 
 
 @router.post("/refresh", response_model=schemas.Token)
