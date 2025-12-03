@@ -39,7 +39,10 @@ def update_user_me(
     """
     Update own user.
     """
-    user = service.update_user(db, user=current_user, user_in=user_in)
+    try:
+        user = service.update_user(db, user=current_user, user_in=user_in)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return user
 
 @router.patch("/{user_id}", response_model=UserRead)
@@ -64,5 +67,8 @@ def update_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges",
         )
-    user = service.update_user(db, user=user, user_in=user_in)
+    try:
+        user = service.update_user(db, user=user, user_in=user_in)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return user

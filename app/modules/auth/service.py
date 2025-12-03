@@ -66,11 +66,18 @@ def refresh_access_token(db: Session, token: str) -> dict:
     sub = payload.get("sub")
     if not sub:
         raise ValueError("Invalid token payload")
+    token_ver = payload.get("ver", 0)
+    try:
+        token_ver_int = int(token_ver)
+    except (TypeError, ValueError):
+        raise ValueError("Invalid token payload")
 
     # Fetch user and use their current token_version in new tokens
     user = users_repository.get_by_id(db, user_id=sub)
     if not user:
         raise ValueError("Invalid token subject")
+    if token_ver_int != int(getattr(user, "token_version", 0)):
+        raise ValueError("Refresh token no longer valid")
     access = security.create_access_token(subject=str(sub))
     access = security.jwt.encode({**security.decode_token(access), "ver": user.token_version}, security.settings.JWT_SECRET_KEY, algorithm="HS256")
     refresh = security.create_refresh_token(subject=str(sub))
