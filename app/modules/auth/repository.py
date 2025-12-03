@@ -1,6 +1,9 @@
 from sqlalchemy.orm import Session
 
 from app.modules.users import models as user_models
+from app.modules.auth import models as auth_models
+from datetime import datetime
+
 
 
 def get_by_email(db: Session, email: str):
@@ -17,3 +20,15 @@ def create_user(db: Session, *, email: str, password_hash: str):
     db.commit()
     db.refresh(user)
     return user
+
+
+def revoke_token(db: Session, token: str, expires_at: datetime | None = None):
+    revoked = auth_models.RevokedToken(token=token, expires_at=expires_at)
+    db.add(revoked)
+    db.commit()
+    return revoked
+
+
+def is_token_revoked(db: Session, token: str) -> bool:
+    exists = db.query(auth_models.RevokedToken).filter(auth_models.RevokedToken.token == token).first()
+    return exists is not None

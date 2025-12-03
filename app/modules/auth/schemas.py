@@ -24,3 +24,12 @@ class TokenPayload(BaseModel):
     sub: str
     exp: int
     type: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    reset_token: str
+    new_password: str = Field(min_length=6)

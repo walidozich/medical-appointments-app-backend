@@ -28,6 +28,7 @@ def create_access_token(subject: str | Any, expires_minutes: Optional[int] = Non
         "sub": str(subject),
         "exp": expire,
         "type": "access",
+        # 'ver' will be filled by caller when available (token_version)
     }
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm="HS256")
 
@@ -43,8 +44,24 @@ def create_refresh_token(subject: str | Any, expires_days: Optional[int] = None)
         "sub": str(subject),
         "exp": expire,
         "type": "refresh",
+        # 'ver' will be filled by caller when available (token_version)
     }
     return jwt.encode(to_encode, settings.JWT_REFRESH_SECRET, algorithm="HS256")
+
+
+def create_password_reset_token(subject: str | Any, expires_minutes: Optional[int] = None) -> str:
+    if expires_minutes is None:
+        expires_minutes = 15
+
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=expires_minutes)
+
+    to_encode = {
+        "sub": str(subject),
+        "exp": expire,
+        "type": "reset",
+    }
+    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm="HS256")
 
 
 def decode_token(token: str, refresh: bool = False) -> dict:

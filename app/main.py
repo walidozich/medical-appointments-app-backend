@@ -15,6 +15,33 @@ def create_app() -> FastAPI:
         debug=settings.DEBUG,
     )
 
+    # Add OpenAPI security scheme for refresh tokens (header `X-Refresh-Token`).
+    # This makes the Swagger "Authorize" dialog allow entering a refresh token.
+    from fastapi.openapi.utils import get_openapi
+
+    def custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        openapi_schema = get_openapi(
+            title=app.title,
+            version="1.0.0",
+            routes=app.routes,
+        )
+        components = openapi_schema.setdefault("components", {})
+        security_schemes = components.setdefault("securitySchemes", {})
+        security_schemes.setdefault(
+            "RefreshToken",
+            {
+                "type": "apiKey",
+                "name": "X-Refresh-Token",
+                "in": "header",
+            },
+        )
+        app.openapi_schema = openapi_schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi
+
     # CORS – adjust origins as needed
     app.add_middleware(
         CORSMiddleware,
