@@ -187,6 +187,31 @@ If this matches what you want, I will then proceed to:
 
 ---
 
+## Left to Do (implementation backlog)
+
+* Social auth (Google, Facebook) and unify returned user object.
+* Doctor discovery: search/browse by specialty/location/rating; favorites; reviews/ratings endpoints and aggregates.
+* Doctor schedules: richer availability API with calendar-friendly slots.
+* Chat: threads/messages + WebSocket real-time delivery and history.
+* Payments: integrate payment gateway (e.g., Stripe) for appointment payments, webhooks, receipts.
+* Notifications: push/email/SMS/in-app for bookings, changes, payments, chat.
+* Admin dashboard APIs: manage specialties, reviews, users, reporting.
+* Security/observability: rate limiting, audit logging, optional data-at-rest encryption for sensitive fields.
+* Testing: pytest coverage for auth, RBAC, patients, doctors, appointments, medical records, billing.
+
+## Progress Recap (done)
+
+* Core auth: email/password, refresh tokens, logout with revocation, password reset.
+* RBAC: roles table (Admin, Doctor, Patient, Staff); role guard dependency.
+* Patients: profiles with identity/medical info; CRUD (self + admin).
+* Doctors: profiles, specialties, availability; CRUD (self + admin); public listing.
+* Appointments: booking with conflict checks vs availability; reschedule/cancel; statuses SCHEDULED/COMPLETED/CANCELLED.
+* Medical Records: diagnoses/treatments/prescriptions; doctor/patient scoped access.
+* Billing/Insurance: billing entries, policies, claims; admin + patient views.
+* API envelope: standardized `{success, data, message}` responses; centralized exception handling.
+* Migrations created for roles, patients, doctors, appointments, medical records, billing/insurance.
+
+---
 
 
 
