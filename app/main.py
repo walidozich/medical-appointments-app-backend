@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.exceptions import register_exception_handlers
 from app.api_router import api_router
+from app.core.envelope import ResponseEnvelopeMiddleware
 
 
 def create_app() -> FastAPI:
@@ -14,6 +15,9 @@ def create_app() -> FastAPI:
         title=settings.APP_NAME,
         debug=settings.DEBUG,
     )
+
+    # Standard response envelope
+    app.add_middleware(ResponseEnvelopeMiddleware)
 
     # Add OpenAPI security scheme for refresh tokens (header `X-Refresh-Token`).
     # This makes the Swagger "Authorize" dialog allow entering a refresh token.

@@ -11,6 +11,7 @@ from app.modules.users.models import User
 from app.core import security
 from app.modules.users import repository as users_repository
 from app.modules.auth import repository as auth_repository
+from typing import Iterable
 
 reusable_oauth2 = HTTPBearer(
     scheme_name="Bearer"
@@ -66,3 +67,20 @@ async def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
     return current_user
+
+
+def require_roles(*allowed_roles: str):
+    allowed = {role.upper() for role in allowed_roles}
+
+    async def role_checker(current_user: Annotated[User, Depends(get_current_active_user)]) -> User:
+        role_name = getattr(current_user, "role_name", None)
+        if current_user.is_superuser:
+            return current_user
+        if role_name is None or role_name.upper() not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient role permissions",
+            )
+        return current_user
+
+    return role_checker

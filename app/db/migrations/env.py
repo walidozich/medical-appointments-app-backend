@@ -15,6 +15,11 @@ from app.core.config import settings
 
 # Import all models to ensure they are registered with Base.metadata
 import app.modules.users.models # noqa: F401
+import app.modules.patients.models # noqa: F401
+import app.modules.doctors.models # noqa: F401
+import app.modules.appointments.models # noqa: F401
+import app.modules.medical_records.models # noqa: F401
+import app.modules.billing.models # noqa: F401
 
 # This is the Alembic Config object
 config = context.config

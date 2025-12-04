@@ -15,7 +15,10 @@ def get_by_id(db: Session, user_id):
 
 
 def create_user(db: Session, *, email: str, password_hash: str):
-    user = user_models.User(email=email, password_hash=password_hash)
+    # Default to patient role if available
+    from app.modules.users.repository import get_default_role
+    default_role = get_default_role(db)
+    user = user_models.User(email=email, password_hash=password_hash, role_id=default_role.id)
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -2,7 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db, get_current_active_user
+from app.core.dependencies import get_db, get_current_active_user, require_roles
 from app.modules.users.schemas import UserRead, UserUpdate
 from app.modules.users.models import User
 from . import service, repository
@@ -17,15 +17,15 @@ async def read_users_me(current_user: User = Depends(get_current_active_user)):
     return current_user
 
 @router.get("/", response_model=List[UserRead])
-def read_users(db: Session = Depends(get_db), skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user)):
+def read_users(
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 100,
+    admin_user: User = Depends(require_roles("ADMIN")),
+):
     """
     Retrieve users.
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="The user doesn't have enough privileges",
-        )
     users = service.get_users(db, skip=skip, limit=limit)
     return users
 
@@ -39,7 +39,15 @@ def update_user_me(
     """
     Update own user.
     """
-    user = service.update_user(db, user=current_user, user_in=user_in)
+    if user_in.role is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot change your role",
+        )
+    try:
+        user = service.update_user(db, user=current_user, user_in=user_in)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return user
 
 @router.patch("/{user_id}", response_model=UserRead)
@@ -48,7 +56,7 @@ def update_user(
     db: Session = Depends(get_db),
     user_id: str,
     user_in: UserUpdate,
-    current_user: User = Depends(get_current_active_user),
+    admin_user: User = Depends(require_roles("ADMIN")),
 ):
     """
     Update a user.
@@ -59,10 +67,8 @@ def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The user with this username does not exist in the system",
         )
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="The user doesn't have enough privileges",
-        )
-    user = service.update_user(db, user=user, user_in=user_in)
+    try:
+        user = service.update_user(db, user=user, user_in=user_in)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return user
