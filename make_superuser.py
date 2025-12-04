@@ -2,7 +2,7 @@ import sys
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
-from app.modules.users.models import User
+from app.modules.users.models import User, Role
 
 def make_superuser(email: str):
     """Make a user a superuser."""
@@ -15,6 +15,13 @@ def make_superuser(email: str):
 
         if user:
             user.is_superuser = True
+            admin_role = db.execute(select(Role).where(Role.name == "ADMIN")).scalar_one_or_none()
+            if not admin_role:
+                admin_role = Role(name="ADMIN")
+                db.add(admin_role)
+                db.commit()
+                db.refresh(admin_role)
+            user.role_id = admin_role.id
             db.add(user)
             db.commit()
             print(f"User {email} is now a superuser.")
