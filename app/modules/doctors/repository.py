@@ -1,4 +1,6 @@
 from typing import List, Sequence
+from uuid import UUID
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.modules.doctors import models
@@ -14,6 +16,33 @@ def get_doctor_by_user(db: Session, user_id):
 
 def list_doctors(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Doctor).offset(skip).limit(limit).all()
+
+
+def search_doctors(
+    db: Session,
+    *,
+    name: str | None = None,
+    specialty: str | None = None,
+    city: str | None = None,
+    min_rating: float | None = None,
+    skip: int = 0,
+    limit: int = 100,
+):
+    query = db.query(models.Doctor)
+
+    if specialty:
+        query = query.join(models.Doctor.specialties).filter(func.lower(models.Specialty.name) == specialty.lower())
+    if city:
+        query = query.filter(func.lower(models.Doctor.city) == city.lower())
+    if name:
+        lowered = f"%{name.lower()}%"
+        query = query.filter(
+            func.lower(models.Doctor.first_name).like(lowered) | func.lower(models.Doctor.last_name).like(lowered)
+        )
+    if min_rating is not None:
+        query = query.filter(models.Doctor.avg_rating >= min_rating)
+
+    return query.distinct().offset(skip).limit(limit).all()
 
 
 def upsert_specialties(db: Session, names: Sequence[str]):
@@ -90,3 +119,56 @@ def update_availability(db: Session, availability: models.DoctorAvailability, up
 def delete_availability(db: Session, availability: models.DoctorAvailability):
     db.delete(availability)
     db.commit()
+
+
+def toggle_favorite(db: Session, *, patient_id: UUID, doctor_id: UUID, add: bool = True) -> models.FavoriteDoctor | None:
+    existing = (
+        db.query(models.FavoriteDoctor)
+        .filter(models.FavoriteDoctor.patient_id == patient_id, models.FavoriteDoctor.doctor_id == doctor_id)
+        .first()
+    )
+    if add:
+        if existing:
+            return existing
+        fav = models.FavoriteDoctor(patient_id=patient_id, doctor_id=doctor_id)
+        db.add(fav)
+        db.commit()
+        db.refresh(fav)
+        return fav
+    if existing:
+        db.delete(existing)
+        db.commit()
+    return None
+
+
+def list_favorites(db: Session, *, patient_id: UUID):
+    return (
+        db.query(models.Doctor)
+        .join(models.FavoriteDoctor, models.FavoriteDoctor.doctor_id == models.Doctor.id)
+        .filter(models.FavoriteDoctor.patient_id == patient_id)
+        .all()
+    )
+
+
+def create_review(db: Session, *, patient_id: UUID, doctor_id: UUID, rating: int, comment: str | None):
+    review = models.Review(patient_id=patient_id, doctor_id=doctor_id, rating=rating, comment=comment)
+    db.add(review)
+    db.flush()
+    # update aggregates
+    stats = (
+        db.query(func.count(models.Review.id), func.avg(models.Review.rating))
+        .filter(models.Review.doctor_id == doctor_id)
+        .one()
+    )
+    doc = db.query(models.Doctor).filter(models.Doctor.id == doctor_id).first()
+    if doc:
+        doc.rating_count = int(stats[0] or 0)
+        doc.avg_rating = float(stats[1] or 0)
+        db.add(doc)
+    db.commit()
+    db.refresh(review)
+    return review
+
+
+def list_reviews(db: Session, doctor_id: UUID):
+    return db.query(models.Review).filter(models.Review.doctor_id == doctor_id).order_by(models.Review.created_at.desc()).all()

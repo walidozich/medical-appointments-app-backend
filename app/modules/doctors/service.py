@@ -4,6 +4,7 @@ from typing import List
 
 from app.modules.doctors import repository, schemas
 from app.modules.users import repository as users_repository
+from app.modules.patients import repository as patients_repository
 
 
 def _ensure_user_is_doctor(db: Session, user_id: UUID):
@@ -16,7 +17,26 @@ def _ensure_user_is_doctor(db: Session, user_id: UUID):
     return user
 
 
-def list_doctors(db: Session, skip: int = 0, limit: int = 100):
+def list_doctors(
+    db: Session,
+    *,
+    name: str | None = None,
+    specialty: str | None = None,
+    city: str | None = None,
+    min_rating: float | None = None,
+    skip: int = 0,
+    limit: int = 100,
+):
+    if any([name, specialty, city, min_rating is not None]):
+        return repository.search_doctors(
+            db,
+            name=name,
+            specialty=specialty,
+            city=city,
+            min_rating=min_rating,
+            skip=skip,
+            limit=limit,
+        )
     return repository.list_doctors(db, skip=skip, limit=limit)
 
 
@@ -96,3 +116,40 @@ def delete_availability(db: Session, availability_id: UUID, doctor_id: UUID | No
         raise ValueError("Cannot delete another doctor's availability")
     repository.delete_availability(db, availability=availability)
     return True
+
+
+def _get_patient_for_user(db: Session, user_id: UUID):
+    patient = patients_repository.get_by_user_id(db, user_id=user_id)
+    if not patient:
+        raise ValueError("Patient profile not found")
+    return patient
+
+
+def add_favorite(db: Session, doctor_id: UUID, user_id: UUID):
+    doctor = get_doctor(db, doctor_id)
+    patient = _get_patient_for_user(db, user_id)
+    return repository.toggle_favorite(db, patient_id=patient.id, doctor_id=doctor.id, add=True)
+
+
+def remove_favorite(db: Session, doctor_id: UUID, user_id: UUID):
+    doctor = get_doctor(db, doctor_id)
+    patient = _get_patient_for_user(db, user_id)
+    repository.toggle_favorite(db, patient_id=patient.id, doctor_id=doctor.id, add=False)
+    return True
+
+
+def list_favorites(db: Session, user_id: UUID):
+    patient = _get_patient_for_user(db, user_id)
+    return repository.list_favorites(db, patient_id=patient.id)
+
+
+def add_review(db: Session, doctor_id: UUID, user_id: UUID, review_in: schemas.ReviewCreate):
+    doctor = get_doctor(db, doctor_id)
+    patient = _get_patient_for_user(db, user_id)
+    data = review_in.model_dump()
+    return repository.create_review(db, patient_id=patient.id, doctor_id=doctor.id, rating=data["rating"], comment=data.get("comment"))
+
+
+def list_reviews(db: Session, doctor_id: UUID):
+    doctor = get_doctor(db, doctor_id)
+    return repository.list_reviews(db, doctor.id)

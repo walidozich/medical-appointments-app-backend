@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,8 +12,24 @@ router = APIRouter()
 
 
 @router.get("/", response_model=List[schemas.DoctorRead])
-def list_doctors(db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
-    doctors = service.list_doctors(db, skip=skip, limit=limit)
+def list_doctors(
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 100,
+    name: Optional[str] = None,
+    specialty: Optional[str] = None,
+    city: Optional[str] = None,
+    min_rating: Optional[float] = None,
+):
+    doctors = service.list_doctors(
+        db,
+        skip=skip,
+        limit=limit,
+        name=name,
+        specialty=specialty,
+        city=city,
+        min_rating=min_rating,
+    )
     return doctors
 
 
@@ -148,3 +164,60 @@ def delete_availability(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return None
+
+
+@router.post("/{doctor_id}/favorite", response_model=schemas.FavoriteRead, status_code=status.HTTP_201_CREATED)
+def add_favorite(
+    doctor_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PATIENT")),
+):
+    try:
+        return service.add_favorite(db, doctor_id=doctor_id, user_id=current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{doctor_id}/favorite", status_code=status.HTTP_204_NO_CONTENT)
+def remove_favorite(
+    doctor_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PATIENT")),
+):
+    try:
+        service.remove_favorite(db, doctor_id=doctor_id, user_id=current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return None
+
+
+@router.get("/me/favorites", response_model=List[schemas.DoctorRead])
+def list_my_favorites(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PATIENT")),
+):
+    try:
+        return service.list_favorites(db, user_id=current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/{doctor_id}/reviews", response_model=List[schemas.ReviewRead])
+def list_reviews(doctor_id: UUID, db: Session = Depends(get_db)):
+    try:
+        return service.list_reviews(db, doctor_id=doctor_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/{doctor_id}/reviews", response_model=schemas.ReviewRead, status_code=status.HTTP_201_CREATED)
+def add_review(
+    doctor_id: UUID,
+    payload: schemas.ReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("PATIENT")),
+):
+    try:
+        return service.add_review(db, doctor_id=doctor_id, user_id=current_user.id, review_in=payload)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

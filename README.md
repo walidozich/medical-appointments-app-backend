@@ -45,7 +45,7 @@ DEBUG=true
 ## Migrations
 Use the wrapper to ensure venv is used:
 ```
-./run-alembic.sh upgrade head
+python -m alembic upgrade head
 ```
 Requires network access to your Postgres host.
 

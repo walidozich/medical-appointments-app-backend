@@ -27,6 +27,8 @@ class Doctor(Base):
     user = relationship("User")
     specialties = relationship("Specialty", secondary="doctor_specialties", back_populates="doctors")
     availability = relationship("DoctorAvailability", back_populates="doctor", cascade="all, delete-orphan")
+    favorites = relationship("FavoriteDoctor", back_populates="doctor", cascade="all, delete-orphan")
+    reviews = relationship("Review", back_populates="doctor", cascade="all, delete-orphan")
 
 
 class Specialty(Base):
@@ -60,3 +62,27 @@ class DoctorAvailability(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     doctor = relationship("Doctor", back_populates="availability")
+
+
+class FavoriteDoctor(Base):
+    __tablename__ = "favorite_doctors"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    doctor_id = Column(UUID(as_uuid=True), ForeignKey("doctors.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    doctor = relationship("Doctor", back_populates="favorites")
+
+
+class Review(Base):
+    __tablename__ = "doctor_reviews"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    doctor_id = Column(UUID(as_uuid=True), ForeignKey("doctors.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating = Column(Integer, nullable=False)  # 1-5
+    comment = Column(String(1000), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    doctor = relationship("Doctor", back_populates="reviews")

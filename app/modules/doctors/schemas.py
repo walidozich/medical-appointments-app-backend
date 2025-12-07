@@ -3,6 +3,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
+from pydantic import Field
 
 
 class SpecialtyBase(BaseModel):
@@ -71,5 +72,31 @@ class DoctorRead(DoctorBase):
     created_at: datetime
     updated_at: datetime
     specialties: List[SpecialtyRead] = []
+
+    model_config = {"from_attributes": True}
+
+
+class FavoriteRead(BaseModel):
+    id: UUID
+    doctor_id: UUID
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewBase(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = None
+
+
+class ReviewCreate(ReviewBase):
+    pass
+
+
+class ReviewRead(ReviewBase):
+    id: UUID
+    patient_id: UUID
+    doctor_id: UUID
+    created_at: datetime
 
     model_config = {"from_attributes": True}
