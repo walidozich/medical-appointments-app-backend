@@ -13,12 +13,14 @@ class ChatThread(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
     doctor_id = Column(UUID(as_uuid=True), ForeignKey("doctors.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="open")  # open | closed
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     messages = relationship("ChatMessage", back_populates="thread", cascade="all, delete-orphan")
     patient = relationship("Patient")
     doctor = relationship("Doctor")
+    preferences = relationship("ChatThreadPreference", cascade="all, delete-orphan", back_populates="thread")
 
 
 class ChatMessage(Base):
@@ -36,3 +38,16 @@ class ChatMessage(Base):
     is_system_message = Column(Boolean, default=False, nullable=False)
 
     thread = relationship("ChatThread", back_populates="messages")
+
+
+class ChatThreadPreference(Base):
+    __tablename__ = "chat_thread_preferences"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    thread_id = Column(UUID(as_uuid=True), ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False, index=True)
+    is_archived = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    thread = relationship("ChatThread", back_populates="preferences")

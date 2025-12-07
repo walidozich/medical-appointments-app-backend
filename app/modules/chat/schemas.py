@@ -14,6 +14,7 @@ class ChatThreadRead(BaseModel):
     id: UUID
     patient_id: UUID
     doctor_id: UUID
+    status: str
     created_at: datetime
     updated_at: datetime
 
@@ -45,3 +46,7 @@ class ChatThreadWithMessages(ChatThreadRead):
 
 class ChatAttachmentUpload(BaseModel):
     caption: Optional[str] = None
+
+
+class ChatThreadStatusUpdate(BaseModel):
+    status: str

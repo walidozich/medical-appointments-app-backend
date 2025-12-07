@@ -33,6 +33,14 @@ def create_thread(db: Session, *, patient_id: UUID, doctor_id: UUID) -> models.C
     return thread
 
 
+def update_thread_status(db: Session, thread: models.ChatThread, status: str) -> models.ChatThread:
+    thread.status = status
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+    return thread
+
+
 def list_messages(db: Session, thread_id: UUID, skip: int = 0, limit: int = 50) -> List[models.ChatMessage]:
     return (
         db.query(models.ChatMessage)
@@ -81,3 +89,27 @@ def mark_message_read(db: Session, message: models.ChatMessage) -> models.ChatMe
         db.commit()
         db.refresh(message)
     return message
+
+
+def get_or_create_pref(db: Session, user_id: UUID, thread_id: UUID) -> models.ChatThreadPreference:
+    pref = (
+        db.query(models.ChatThreadPreference)
+        .filter(models.ChatThreadPreference.user_id == user_id, models.ChatThreadPreference.thread_id == thread_id)
+        .first()
+    )
+    if pref:
+        return pref
+    pref = models.ChatThreadPreference(user_id=user_id, thread_id=thread_id, is_archived=False)
+    db.add(pref)
+    db.commit()
+    db.refresh(pref)
+    return pref
+
+
+def set_archived(db: Session, user_id: UUID, thread_id: UUID, is_archived: bool) -> models.ChatThreadPreference:
+    pref = get_or_create_pref(db, user_id=user_id, thread_id=thread_id)
+    pref.is_archived = is_archived
+    db.add(pref)
+    db.commit()
+    db.refresh(pref)
+    return pref

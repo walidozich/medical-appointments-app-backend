@@ -148,7 +148,7 @@ async def websocket_chat(websocket: WebSocket, thread_id: UUID, db: Session = De
         return
 
     thread = get_thread(db, thread_id)
-    if not thread:
+    if not thread or thread.status.lower() == "closed":
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     try:
@@ -164,6 +164,11 @@ async def websocket_chat(websocket: WebSocket, thread_id: UUID, db: Session = De
             content = data.get("content")
             if not content:
                 continue
+            # re-check status
+            thread = get_thread(db, thread_id)
+            if not thread or thread.status.lower() == "closed":
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
             msg = add_message(
                 db,
                 thread_id=thread.id,
@@ -205,5 +210,18 @@ def upload_attachment(
     try:
         msg = service.upload_attachment(db, current_user, thread_id=thread_id, file=file, caption=caption)
         return msg
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/threads/{thread_id}/status", response_model=schemas.ChatThreadRead)
+def update_thread_status(
+    thread_id: UUID,
+    payload: schemas.ChatThreadStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    try:
+        return service.update_thread_status(db, current_user, thread_id=thread_id, status=payload.status)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

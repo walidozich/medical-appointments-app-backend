@@ -91,6 +91,8 @@ def post_message(db: Session, current_user, thread_id: UUID, msg_in: schemas.Cha
     thread = repository.get_thread(db, thread_id=thread_id)
     if not thread:
         raise ValueError("Thread not found")
+    if thread.status.lower() == "closed":
+        raise ValueError("Thread is closed")
     role = getattr(current_user, "role_name", "").upper()
     if role == "PATIENT":
         patient = _get_patient(db, current_user.id)
@@ -163,6 +165,36 @@ def mark_message_read(db: Session, current_user, message_id: UUID, on_broadcast:
     return msg
 
 
+def update_thread_status(db: Session, current_user, thread_id: UUID, status: str):
+    status = status.lower()
+    if status not in {"open", "closed", "archived"}:
+        raise ValueError("Invalid status")
+    thread = repository.get_thread(db, thread_id=thread_id)
+    if not thread:
+        raise ValueError("Thread not found")
+
+    role = getattr(current_user, "role_name", "").upper()
+    # ensure participant
+    if role == "PATIENT":
+        patient = _get_patient(db, current_user.id)
+        if thread.patient_id != patient.id:
+            raise ValueError("Not a participant")
+    elif role == "DOCTOR":
+        doctor = _get_doctor(db, current_user.id)
+        if thread.doctor_id != doctor.id:
+            raise ValueError("Not a participant")
+    else:
+        raise ValueError("Not allowed")
+
+    if status == "archived":
+        repository.set_archived(db, user_id=current_user.id, thread_id=thread.id, is_archived=True)
+        return thread  # status remains unchanged globally
+
+    # open/closed is global
+    thread = repository.update_thread_status(db, thread=thread, status=status)
+    return thread
+
+
 ALLOWED_FILE_TYPES = {"image/png", "image/jpeg", "image/jpg", "application/pdf"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
@@ -179,6 +211,8 @@ def upload_attachment(
     thread = repository.get_thread(db, thread_id=thread_id)
     if not thread:
         raise ValueError("Thread not found")
+    if thread.status.lower() == "closed":
+        raise ValueError("Thread is closed")
 
     role = getattr(current_user, "role_name", "").upper()
     if role == "PATIENT":
