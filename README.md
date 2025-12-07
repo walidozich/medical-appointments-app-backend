@@ -71,6 +71,7 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
 - Medical Records: `/medical-records/me`, `/medical-records/doctor/me`, `/medical-records/{id}`
 - Billing: `/billing`, `/billing/{id}`, `/billing/me`, `/billing/patient/{id}`, `/billing/policies...`, `/billing/claims...`
 - Chat: `/chat/threads` (list/create), `/chat/threads/{id}/messages` (list/create), WebSocket `/chat/ws/{id}?token=<access-token>`
+- Notifications: `/notifications` (list with filters), `/notifications/{id}` (delete), `/notifications/{id}/read`, `/notifications/read-all`
 
 ## Roles & Access
 - Admin: full access.
