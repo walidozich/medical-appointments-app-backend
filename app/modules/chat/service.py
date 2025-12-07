@@ -7,6 +7,7 @@ from app.modules.chat import repository, schemas
 from app.modules.patients import repository as patients_repository
 from app.modules.doctors import repository as doctors_repository
 from app.modules.notifications import service as notifications_service, schemas as notif_schemas
+from app.modules.chat import models as chat_models
 
 
 def _get_patient(db: Session, user_id: UUID):
@@ -120,3 +121,40 @@ def post_message(db: Session, current_user, thread_id: UUID, msg_in: schemas.Cha
             ),
         )
     return message
+
+
+def mark_message_read(db: Session, current_user, message_id: UUID, on_broadcast: callable | None = None):
+    msg = repository.get_message(db, message_id=message_id)
+    if not msg:
+        raise ValueError("Message not found")
+    thread = repository.get_thread(db, thread_id=msg.thread_id)
+    if not thread:
+        raise ValueError("Thread not found")
+
+    role = getattr(current_user, "role_name", "").upper()
+    recipient_user_id = None
+    if role == "PATIENT":
+        patient = _get_patient(db, current_user.id)
+        if thread.patient_id != patient.id:
+            raise ValueError("Not a participant")
+        recipient_user_id = getattr(thread.doctor, "user_id", None) if hasattr(thread, "doctor") else None
+    elif role == "DOCTOR":
+        doctor = _get_doctor(db, current_user.id)
+        if thread.doctor_id != doctor.id:
+            raise ValueError("Not a participant")
+        recipient_user_id = getattr(thread.patient, "user_id", None) if hasattr(thread, "patient") else None
+    else:
+        raise ValueError("Not allowed")
+
+    # only recipient can mark read
+    if msg.sender_id == current_user.id:
+        raise ValueError("Sender cannot mark their own message as read")
+    msg = repository.mark_message_read(db, msg)
+
+    if on_broadcast:
+        try:
+            on_broadcast(msg)
+        except Exception:
+            # don't fail the API on broadcast issues
+            pass
+    return msg

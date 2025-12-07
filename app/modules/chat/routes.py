@@ -12,6 +12,7 @@ from app.modules.users.models import User
 from app.modules.users import repository as users_repository
 from app.modules.patients import repository as patients_repository
 from app.modules.doctors import repository as doctors_repository
+from app.modules.chat import repository as chat_repository
 
 
 router = APIRouter()
@@ -172,3 +173,21 @@ async def websocket_chat(websocket: WebSocket, thread_id: UUID, db: Session = De
             await manager.broadcast(thread_id, _serialize_message(msg))
     except WebSocketDisconnect:
         manager.disconnect(thread_id, websocket)
+
+
+@router.patch("/messages/{message_id}/read", response_model=schemas.ChatMessageRead)
+def mark_message_read(
+    message_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    try:
+        msg = service.mark_message_read(
+            db,
+            current_user,
+            message_id=message_id,
+            on_broadcast=lambda m: manager.broadcast(m.thread_id, _serialize_message(m)),
+        )
+        return msg
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
