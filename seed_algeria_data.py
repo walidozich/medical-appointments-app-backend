@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal
 from app.modules.appointments.models import Appointment
-from app.modules.doctors.models import Doctor, DoctorAvailability, Specialty
+from app.modules.doctors.models import Doctor, DoctorAvailability, Specialty, FavoriteDoctor, Review
 from app.modules.patients.models import Patient
 from app.modules.users.models import Role, User
 
@@ -176,6 +176,20 @@ APPOINTMENTS = [
         "duration_minutes": 30,
         "reason": "Sinusite chronique",
     },
+]
+
+FAVORITES = [
+    ("amina.benali@example.dz", "samir.bensalah@example.dz"),
+    ("sofiane.rahmani@example.dz", "nadia.khellaf@example.dz"),
+    ("sara.bouzid@example.dz", "yacine.chekkal@example.dz"),
+    ("hakim.cheriet@example.dz", "mourad.aitali@example.dz"),
+]
+
+REVIEWS = [
+    ("amina.benali@example.dz", "samir.bensalah@example.dz", 5, "Très bon suivi, explications claires."),
+    ("sofiane.rahmani@example.dz", "nadia.khellaf@example.dz", 4, "Consultation rapide, traitement efficace."),
+    ("sara.bouzid@example.dz", "yacine.chekkal@example.dz", 5, "Excellent avec les enfants, très patient."),
+    ("hakim.cheriet@example.dz", "mourad.aitali@example.dz", 4, "Bon diagnostic et conseils pratiques."),
 ]
 
 
@@ -361,6 +375,73 @@ def ensure_appointment(
     print(f"Appointment created: {patient_email} with {doctor_email} on {start.isoformat()}")
 
 
+def ensure_favorite(db: Session, patient_email: str, doctor_email: str):
+    patient_user = db.execute(select(User).where(User.email == patient_email)).scalar_one_or_none()
+    doctor_user = db.execute(select(User).where(User.email == doctor_email)).scalar_one_or_none()
+    if not patient_user or not doctor_user:
+        print(f"Skip favorite: missing user ({patient_email}, {doctor_email})")
+        return
+    patient = db.execute(select(Patient).where(Patient.user_id == patient_user.id)).scalar_one_or_none()
+    doctor = db.execute(select(Doctor).where(Doctor.user_id == doctor_user.id)).scalar_one_or_none()
+    if not patient or not doctor:
+        print(f"Skip favorite: missing profile ({patient_email}, {doctor_email})")
+        return
+    exists = db.execute(
+        select(FavoriteDoctor).where(
+            FavoriteDoctor.patient_id == patient.id,
+            FavoriteDoctor.doctor_id == doctor.id,
+        )
+    ).scalar_one_or_none()
+    if exists:
+        return
+    fav = FavoriteDoctor(patient_id=patient.id, doctor_id=doctor.id)
+    db.add(fav)
+    db.commit()
+    db.refresh(fav)
+    print(f"Favorite added: {patient_email} -> {doctor_email}")
+
+
+def ensure_review(db: Session, patient_email: str, doctor_email: str, rating: int, comment: str | None):
+    patient_user = db.execute(select(User).where(User.email == patient_email)).scalar_one_or_none()
+    doctor_user = db.execute(select(User).where(User.email == doctor_email)).scalar_one_or_none()
+    if not patient_user or not doctor_user:
+        print(f"Skip review: missing user ({patient_email}, {doctor_email})")
+        return
+    patient = db.execute(select(Patient).where(Patient.user_id == patient_user.id)).scalar_one_or_none()
+    doctor = db.execute(select(Doctor).where(Doctor.user_id == doctor_user.id)).scalar_one_or_none()
+    if not patient or not doctor:
+        print(f"Skip review: missing profile ({patient_email}, {doctor_email})")
+        return
+    exists = db.execute(
+        select(Review).where(
+            Review.patient_id == patient.id,
+            Review.doctor_id == doctor.id,
+        )
+    ).scalar_one_or_none()
+    if exists:
+        return
+    rev = Review(patient_id=patient.id, doctor_id=doctor.id, rating=rating, comment=comment)
+    db.add(rev)
+    db.commit()
+    db.refresh(rev)
+    print(f"Review added: {patient_email} -> {doctor_email} ({rating} stars)")
+
+
+def recompute_doctor_ratings(db: Session):
+    doctors = db.execute(select(Doctor)).scalars().all()
+    for doc in doctors:
+        stats = db.execute(
+            select(
+                func.count(Review.id),
+                func.avg(Review.rating),
+            ).where(Review.doctor_id == doc.id)
+        ).one()
+        doc.rating_count = int(stats[0] or 0)
+        doc.avg_rating = float(stats[1] or 0)
+        db.add(doc)
+    db.commit()
+
+
 def seed():
     db = SessionLocal()
     try:
@@ -391,6 +472,13 @@ def seed():
                 duration_minutes=appt["duration_minutes"],
                 reason=appt["reason"],
             )
+        for fav in FAVORITES:
+            ensure_favorite(db, patient_email=fav[0], doctor_email=fav[1])
+
+        for rev in REVIEWS:
+            ensure_review(db, patient_email=rev[0], doctor_email=rev[1], rating=rev[2], comment=rev[3])
+
+        recompute_doctor_ratings(db)
         if _fallback_bcrypt_used:
             print("Used bcrypt fallback for password hashing (passlib backend unavailable for long-secret check).")
     finally:
