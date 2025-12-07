@@ -55,6 +55,13 @@ uvicorn app.main:app --reload
 ```
 Docs at `/docs` (Swagger) and `/redoc`.
 
+## Seed Sample Algerian Data
+Seeds roles, specialties, patients, doctors, availability, and sample appointments. All seeded accounts share password `Algeria123!`.
+```
+./venv/bin/python seed_algeria_data.py
+```
+Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
+
 ## Key Endpoints (prefix `/api/v1`)
 - Auth: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/forgot`, `/auth/reset`
 - Users: `/users/me`, `/users` (admin), `/users/{id}` (admin)
