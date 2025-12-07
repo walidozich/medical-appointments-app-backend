@@ -105,7 +105,7 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
   - `GET/POST /chat/threads` — list/create thread (patient+doctor).
   - `PATCH /chat/threads/{id}/status` — update thread status (`open/closed` global, `archived` per-user).
   - `GET /chat/threads/unread-count` — total unread messages for current user.
-  - `GET /chat/threads` params: `search` (by message content), `sort=recent`, `status=open|closed|archived`, `include_archived`.
+  - `GET /chat/threads` params: `search` (by message content), `sort=recent`, `status=open|closed`, `include_archived` (false excludes your archived).
   - `GET/POST /chat/threads/{id}/messages` — list/send messages.
   - `GET /chat/threads/{id}/messages/search?query=...` — search messages in a thread.
   - `PATCH /chat/messages/{message_id}/read` — mark read (recipient only).
@@ -117,6 +117,11 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
   - `PATCH /notifications/read-all` — mark all read.
   - `DELETE /notifications/{id}` — delete.
   - WebSocket stream: `ws://.../api/v1/notifications/ws?token=<access-token>` (polling push for new notifications).
+
+### WebSockets note
+- WebSocket routes are implemented but intentionally absent from Swagger/OpenAPI (OpenAPI documents HTTP only).
+  - Chat messaging WS: `ws://.../api/v1/chat/ws/chat/{thread_id}` (Bearer token via header or `?token`).
+  - Notifications WS: `ws://.../api/v1/notifications/ws?token=<access-token>`.
 
 ### Realtime strategy (MVP vs. push)
 - Current: lightweight WebSocket polling for MVP, ok for modest traffic.

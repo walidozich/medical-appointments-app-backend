@@ -191,11 +191,10 @@ If this matches what you want, I will then proceed to:
 
 * Social auth (Google, Facebook) and unify returned user object.
 * Payments: integrate payment gateway (e.g., Stripe) for appointment payments, webhooks, receipts.
-* Notifications: push/in-app for bookings, changes, payments, chat.
-* Notifications: email/SMS for bookings, changes, payments.
+* Notifications: push (FCM/APNs) and email/SMS delivery for bookings, changes, payments, chat.
 * Admin dashboard APIs: manage specialties, reviews, users, reporting.
 * Security/observability: rate limiting, audit logging, optional data-at-rest encryption for sensitive fields.
-* Testing: pytest coverage for auth, RBAC, patients, doctors, appointments, medical records, billing.
+* Testing: pytest coverage for auth, RBAC, patients, doctors, appointments, medical records, billing, chat/notifications.
 
 ## Progress Recap (done)
 
@@ -210,7 +209,8 @@ If this matches what you want, I will then proceed to:
 * Migrations created for roles, patients, doctors, appointments, medical records, billing/insurance.
 * Doctor discovery: search/browse by specialty/location/rating; favorites; reviews/ratings endpoints and aggregates. (DONE)
 * Doctor schedules: richer availability API with calendar-friendly slots.
-* Chat: threads/messages + WebSocket real-time delivery and history.
+* Chat: threads/messages + WebSocket real-time delivery, read receipts, attachments, lifecycle (open/closed + per-user archive), search/filter, unread counts.
+* Notifications: in-app notifications with filters/mark-read/read-all/delete; chat events (thread created, message sent, message read) and appointment events generate notifications; WebSocket stream for notifications.
 
 ---
 
