@@ -75,6 +75,12 @@ class DoctorRead(DoctorBase):
 
     model_config = {"from_attributes": True}
 
+class AvailabilitySlotRead(BaseModel):
+    start_time: datetime
+    end_time: datetime
+
+    model_config = {"from_attributes": True}
+
 
 class FavoriteRead(BaseModel):
     id: UUID

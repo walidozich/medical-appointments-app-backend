@@ -1,10 +1,12 @@
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import List
+from datetime import datetime, date, timedelta, timezone
 
 from app.modules.doctors import repository, schemas
 from app.modules.users import repository as users_repository
 from app.modules.patients import repository as patients_repository
+from app.modules.appointments import repository as appointments_repository
 
 
 def _ensure_user_is_doctor(db: Session, user_id: UUID):
@@ -116,6 +118,63 @@ def delete_availability(db: Session, availability_id: UUID, doctor_id: UUID | No
         raise ValueError("Cannot delete another doctor's availability")
     repository.delete_availability(db, availability=availability)
     return True
+
+
+def _iter_slots_for_day(day: date, start_time, end_time, slot_minutes: int):
+    dt_start = datetime.combine(day, start_time, tzinfo=timezone.utc)
+    dt_end = datetime.combine(day, end_time, tzinfo=timezone.utc)
+    current = dt_start
+    delta = timedelta(minutes=slot_minutes)
+    while current + delta <= dt_end:
+        yield current, current + delta
+        current += delta
+
+
+def list_available_slots(
+    db: Session,
+    doctor_id: UUID,
+    start_date: date,
+    days: int = 7,
+    slot_minutes: int = 30,
+    now: datetime | None = None,
+):
+    doctor = get_doctor(db, doctor_id)
+    now = now or datetime.now(timezone.utc)
+    end_date = start_date + timedelta(days=days)
+
+    # Preload availabilities by weekday
+    availabilities = repository.list_availability(db, doctor_id=doctor.id)
+    by_weekday = {}
+    for av in availabilities:
+        if not av.is_active:
+            continue
+        by_weekday.setdefault(av.weekday, []).append(av)
+
+    # Preload scheduled appointments in range
+    start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+    end_dt = datetime.combine(end_date, datetime.min.time(), tzinfo=timezone.utc)
+    appts = appointments_repository.list_scheduled_for_doctor_between(db, doctor_id=doctor.id, start_time=start_dt, end_time=end_dt)
+
+    def _to_aware(dt: datetime) -> datetime:
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    busy_windows = [(_to_aware(a.start_time), _to_aware(a.end_time)) for a in appts]
+
+    slots: List[schemas.AvailabilitySlotRead] = []
+    for i in range(days):
+        day = start_date + timedelta(days=i)
+        weekday = day.strftime("%a")
+        day_avails = by_weekday.get(weekday, [])
+        for av in day_avails:
+            for slot_start, slot_end in _iter_slots_for_day(day, av.start_time, av.end_time, slot_minutes):
+                if slot_end <= now:
+                    continue
+                has_conflict = any(not (slot_end <= b_start or slot_start >= b_end) for b_start, b_end in busy_windows)
+                if not has_conflict:
+                    slots.append(schemas.AvailabilitySlotRead(start_time=slot_start, end_time=slot_end))
+    return slots
 
 
 def _get_patient_for_user(db: Session, user_id: UUID):

@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -164,6 +165,35 @@ def delete_availability(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return None
+
+
+@router.get("/{doctor_id}/availability/slots", response_model=List[schemas.AvailabilitySlotRead])
+def list_available_slots(
+    doctor_id: UUID,
+    start_date: Optional[str] = None,
+    days: int = 7,
+    slot_minutes: int = 30,
+    db: Session = Depends(get_db),
+):
+    try:
+        if start_date:
+            parsed_start = date.fromisoformat(start_date)
+        else:
+            parsed_start = date.today()
+        if days < 1:
+            raise ValueError("days must be >= 1")
+        if slot_minutes < 5:
+            raise ValueError("slot_minutes must be >= 5")
+        slots = service.list_available_slots(
+            db,
+            doctor_id=doctor_id,
+            start_date=parsed_start,
+            days=days,
+            slot_minutes=slot_minutes,
+        )
+        return slots
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/{doctor_id}/favorite", response_model=schemas.FavoriteRead, status_code=status.HTTP_201_CREATED)

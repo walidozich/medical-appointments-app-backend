@@ -190,7 +190,6 @@ If this matches what you want, I will then proceed to:
 ## Left to Do (implementation backlog)
 
 * Social auth (Google, Facebook) and unify returned user object.
-* Doctor discovery: search/browse by specialty/location/rating; favorites; reviews/ratings endpoints and aggregates.
 * Doctor schedules: richer availability API with calendar-friendly slots.
 * Chat: threads/messages + WebSocket real-time delivery and history.
 * Payments: integrate payment gateway (e.g., Stripe) for appointment payments, webhooks, receipts.
@@ -210,6 +209,7 @@ If this matches what you want, I will then proceed to:
 * Billing/Insurance: billing entries, policies, claims; admin + patient views.
 * API envelope: standardized `{success, data, message}` responses; centralized exception handling.
 * Migrations created for roles, patients, doctors, appointments, medical records, billing/insurance.
+* Doctor discovery: search/browse by specialty/location/rating; favorites; reviews/ratings endpoints and aggregates. (DONE)
 
 ---
 

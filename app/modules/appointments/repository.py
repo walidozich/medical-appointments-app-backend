@@ -48,6 +48,19 @@ def has_conflict(db: Session, doctor_id, start_time: datetime, end_time: datetim
     return conflict is not None
 
 
+def list_scheduled_for_doctor_between(db: Session, doctor_id, start_time: datetime, end_time: datetime):
+    return (
+        db.query(models.Appointment)
+        .filter(
+            models.Appointment.doctor_id == doctor_id,
+            models.Appointment.status == "SCHEDULED",
+            models.Appointment.start_time < end_time,
+            models.Appointment.end_time > start_time,
+        )
+        .all()
+    )
+
+
 def create_appointment(db: Session, payload: dict):
     appt = models.Appointment(**payload)
     db.add(appt)
