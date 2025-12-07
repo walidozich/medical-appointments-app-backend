@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.modules.chat import repository, schemas
 from app.modules.patients import repository as patients_repository
 from app.modules.doctors import repository as doctors_repository
+from app.modules.notifications import service as notifications_service, schemas as notif_schemas
 
 
 def _get_patient(db: Session, user_id: UUID):
@@ -92,17 +93,30 @@ def post_message(db: Session, current_user, thread_id: UUID, msg_in: schemas.Cha
         if thread.patient_id != patient.id:
             raise ValueError("Not a participant in this thread")
         sender_role = "PATIENT"
+        recipient_user_id = getattr(thread.doctor, "user_id", None) if hasattr(thread, "doctor") else None
     elif role == "DOCTOR":
         doctor = _get_doctor(db, current_user.id)
         if thread.doctor_id != doctor.id:
             raise ValueError("Not a participant in this thread")
         sender_role = "DOCTOR"
+        recipient_user_id = getattr(thread, "patient", None).user_id if getattr(thread, "patient", None) else None
     else:
         raise ValueError("Not allowed")
-    return repository.add_message(
+    message = repository.add_message(
         db,
         thread_id=thread.id,
         sender_id=current_user.id,
         sender_role=sender_role,
         content=msg_in.content,
     )
+    if recipient_user_id:
+        notifications_service.notify(
+            db,
+            notif_schemas.NotificationCreate(
+                user_id=recipient_user_id,
+                type="CHAT",
+                title="New message",
+                body=msg_in.content[:200],
+            ),
+        )
+    return message

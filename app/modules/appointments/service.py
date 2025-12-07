@@ -6,6 +6,7 @@ from app.modules.appointments import repository, schemas
 from app.modules.patients import repository as patients_repository
 from app.modules.doctors import repository as doctors_repository
 from app.modules.doctors import models as doctor_models
+from app.modules.notifications import service as notifications_service, schemas as notif_schemas
 
 
 VALID_STATUSES = {"SCHEDULED", "COMPLETED", "CANCELLED"}
@@ -69,6 +70,24 @@ def create_appointment(db: Session, patient_id: UUID | None, payload: schemas.Ap
             "status": "SCHEDULED",
         },
     )
+    notifications_service.notify(
+        db,
+        notif_schemas.NotificationCreate(
+            user_id=doctor.user_id,
+            type="APPOINTMENT",
+            title="New appointment booked",
+            body=f"Patient booked for {payload.start_time.isoformat()}",
+        ),
+    )
+    notifications_service.notify(
+        db,
+        notif_schemas.NotificationCreate(
+            user_id=patient.user_id,
+            type="APPOINTMENT",
+            title="Appointment confirmed",
+            body=f"With Dr. {doctor.last_name or doctor.first_name} at {payload.start_time.isoformat()}",
+        ),
+    )
 
 
 def cancel_appointment(db: Session, appointment_id: UUID, cancellation_reason: str | None = None):
@@ -78,7 +97,30 @@ def cancel_appointment(db: Session, appointment_id: UUID, cancellation_reason: s
     if appt.status == "CANCELLED":
         return appt
     updates = {"status": "CANCELLED", "cancellation_reason": cancellation_reason}
-    return repository.update_appointment(db, appointment=appt, updates=updates)
+    updated = repository.update_appointment(db, appointment=appt, updates=updates)
+    patient = appt.patient
+    doctor = appt.doctor
+    if patient and getattr(patient, "user_id", None):
+        notifications_service.notify(
+            db,
+            notif_schemas.NotificationCreate(
+                user_id=patient.user_id,
+                type="APPOINTMENT",
+                title="Appointment cancelled",
+                body=cancellation_reason or "Your appointment was cancelled",
+            ),
+        )
+    if doctor and getattr(doctor, "user_id", None):
+        notifications_service.notify(
+            db,
+            notif_schemas.NotificationCreate(
+                user_id=doctor.user_id,
+                type="APPOINTMENT",
+                title="Appointment cancelled",
+                body="Patient cancelled an appointment.",
+            ),
+        )
+    return updated
 
 
 def update_status(db: Session, appointment_id: UUID, status: str):
@@ -87,7 +129,30 @@ def update_status(db: Session, appointment_id: UUID, status: str):
     appt = repository.get_by_id(db, appointment_id=appointment_id)
     if not appt:
         raise ValueError("Appointment not found")
-    return repository.update_appointment(db, appointment=appt, updates={"status": status})
+    updated = repository.update_appointment(db, appointment=appt, updates={"status": status})
+    patient = appt.patient
+    doctor = appt.doctor
+    if patient and getattr(patient, "user_id", None):
+        notifications_service.notify(
+            db,
+            notif_schemas.NotificationCreate(
+                user_id=patient.user_id,
+                type="APPOINTMENT",
+                title=f"Appointment {status.title()}",
+                body="Status changed.",
+            ),
+        )
+    if doctor and getattr(doctor, "user_id", None):
+        notifications_service.notify(
+            db,
+            notif_schemas.NotificationCreate(
+                user_id=doctor.user_id,
+                type="APPOINTMENT",
+                title=f"Appointment {status.title()}",
+                body="Status changed.",
+            ),
+        )
+    return updated
 
 
 def reschedule_appointment(db: Session, appointment_id: UUID, start_time: datetime, end_time: datetime):
@@ -98,8 +163,31 @@ def reschedule_appointment(db: Session, appointment_id: UUID, start_time: dateti
     _check_doctor_availability(db, doctor_id=appt.doctor_id, start_time=start_time, end_time=end_time)
     if repository.has_conflict(db, doctor_id=appt.doctor_id, start_time=start_time, end_time=end_time):
         raise ValueError("Doctor is not available at the requested time")
-    return repository.update_appointment(
+    updated = repository.update_appointment(
         db,
         appointment=appt,
         updates={"start_time": start_time, "end_time": end_time, "status": "SCHEDULED"},
     )
+    patient = appt.patient
+    doctor = appt.doctor
+    if patient and getattr(patient, "user_id", None):
+        notifications_service.notify(
+            db,
+            notif_schemas.NotificationCreate(
+                user_id=patient.user_id,
+                type="APPOINTMENT",
+                title="Appointment rescheduled",
+                body=f"New time: {start_time.isoformat()}",
+            ),
+        )
+    if doctor and getattr(doctor, "user_id", None):
+        notifications_service.notify(
+            db,
+            notif_schemas.NotificationCreate(
+                user_id=doctor.user_id,
+                type="APPOINTMENT",
+                title="Appointment rescheduled",
+                body=f"New time: {start_time.isoformat()}",
+            ),
+        )
+    return updated

@@ -17,6 +17,8 @@ class ChatThread(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     messages = relationship("ChatMessage", back_populates="thread", cascade="all, delete-orphan")
+    patient = relationship("Patient")
+    doctor = relationship("Doctor")
 
 
 class ChatMessage(Base):
