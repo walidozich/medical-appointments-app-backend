@@ -104,7 +104,10 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
 - Chat:
   - `GET/POST /chat/threads` — list/create thread (patient+doctor).
   - `PATCH /chat/threads/{id}/status` — update thread status (`open/closed` global, `archived` per-user).
+  - `GET /chat/threads/unread-count` — total unread messages for current user.
+  - `GET /chat/threads` params: `search` (by message content), `sort=recent`, `status=open|closed|archived`, `include_archived`.
   - `GET/POST /chat/threads/{id}/messages` — list/send messages.
+  - `GET /chat/threads/{id}/messages/search?query=...` — search messages in a thread.
   - `PATCH /chat/messages/{message_id}/read` — mark read (recipient only).
   - `POST /chat/threads/{id}/attachments` — upload attachment (png/jpg/pdf <=10MB) with optional caption.
   - WebSocket messaging: `ws://.../api/v1/chat/ws/chat/{thread_id}` with Bearer token (header or `?token`) for real-time messages/read receipts.
