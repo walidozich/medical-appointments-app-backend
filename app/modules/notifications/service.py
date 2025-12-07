@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.notifications import repository, schemas
 from datetime import datetime
+from app.modules.chat import repository as chat_repo
 
 
 def notify(db: Session, payload: schemas.NotificationCreate):
@@ -44,3 +45,49 @@ def delete_notification(db: Session, notification_id: UUID, user_id: UUID):
     if not ok:
         raise ValueError("Notification not found")
     return True
+
+
+# Chat-specific helpers
+def notify_message_sent(db: Session, *, thread_id: UUID, recipient_id: UUID, message_id: UUID):
+    return notify(
+        db,
+        schemas.NotificationCreate(
+            user_id=recipient_id,
+            type="CHAT",
+            title="New message",
+            body=f"New message in thread {thread_id}",
+        ),
+    )
+
+
+def notify_message_read(db: Session, *, thread_id: UUID, sender_id: UUID, message_id: UUID):
+    return notify(
+        db,
+        schemas.NotificationCreate(
+            user_id=sender_id,
+            type="CHAT",
+            title="Message read",
+            body=f"Your message in thread {thread_id} was read",
+        ),
+    )
+
+
+def notify_thread_created(db: Session, *, doctor_id: UUID, patient_id: UUID, thread_id: UUID, doctor_user_id: UUID, patient_user_id: UUID):
+    notify(
+        db,
+        schemas.NotificationCreate(
+            user_id=doctor_user_id,
+            type="CHAT",
+            title="New chat thread",
+            body=f"Thread started with patient {patient_id}",
+        ),
+    )
+    notify(
+        db,
+        schemas.NotificationCreate(
+            user_id=patient_user_id,
+            type="CHAT",
+            title="New chat thread",
+            body=f"Thread started with doctor {doctor_id}",
+        ),
+    )

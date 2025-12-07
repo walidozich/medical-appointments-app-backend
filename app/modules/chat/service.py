@@ -55,7 +55,17 @@ def get_or_create_thread(db: Session, current_user, payload: schemas.ChatThreadC
     existing = repository.get_thread_by_participants(db, patient_id=patient_id, doctor_id=doctor_id)
     if existing:
         return existing
-    return repository.create_thread(db, patient_id=patient_id, doctor_id=doctor_id)
+    thread = repository.create_thread(db, patient_id=patient_id, doctor_id=doctor_id)
+    # Notify both participants
+    notifications_service.notify_thread_created(
+        db,
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        thread_id=thread.id,
+        doctor_user_id=doctor.user_id,
+        patient_user_id=patient.user_id,
+    )
+    return thread
 
 
 def list_threads(db: Session, current_user) -> List:
@@ -116,14 +126,11 @@ def post_message(db: Session, current_user, thread_id: UUID, msg_in: schemas.Cha
         content=msg_in.content,
     )
     if recipient_user_id:
-        notifications_service.notify(
+        notifications_service.notify_message_sent(
             db,
-            notif_schemas.NotificationCreate(
-                user_id=recipient_user_id,
-                type="CHAT",
-                title="New message",
-                body=(msg_in.content or "")[:200],
-            ),
+            thread_id=thread.id,
+            recipient_id=recipient_user_id,
+            message_id=message.id,
         )
     return message
 
@@ -162,6 +169,13 @@ def mark_message_read(db: Session, current_user, message_id: UUID, on_broadcast:
         except Exception:
             # don't fail the API on broadcast issues
             pass
+    # notify sender their message was read
+    notifications_service.notify_message_read(
+        db,
+        thread_id=msg.thread_id,
+        sender_id=msg.sender_id,
+        message_id=msg.id,
+    )
     return msg
 
 
@@ -250,14 +264,11 @@ def upload_attachment(
     )
 
     if recipient_user_id:
-        notifications_service.notify(
+        notifications_service.notify_message_sent(
             db,
-            notif_schemas.NotificationCreate(
-                user_id=recipient_user_id,
-                type="CHAT",
-                title="New attachment",
-                body=caption or file.filename,
-            ),
+            thread_id=thread.id,
+            recipient_id=recipient_user_id,
+            message_id=msg.id,
         )
 
     return msg
