@@ -6,10 +6,12 @@ Backend for a medical appointments management app, aligned to the project specif
 - Auth: email/password login, refresh tokens, password reset, logout with token revocation.
 - RBAC: roles table (Admin, Doctor, Patient, Staff), role guard dependency.
 - Patients: profile CRUD and medical profile fields.
-- Doctors: profile CRUD, specialties, availability.
-- Appointments: booking, conflict checks, reschedule, cancel; statuses `SCHEDULED/COMPLETED/CANCELLED`.
+- Doctors: profile CRUD, specialties, availability, search/filters, favorites, reviews.
+- Appointments: booking, conflict checks, reschedule, cancel; statuses `SCHEDULED/COMPLETED/CANCELLED`; availability slot generation.
 - Medical Records: diagnoses, treatment plan, prescriptions; doctor/patient scoped access.
 - Billing/Insurance: billing entries linked to appointments/patients, insurance policies, claims.
+- Chat: threads, messages, read receipts, attachments (png/jpg/pdf up to 10MB), WebSocket real-time delivery.
+- Notifications: in-app notifications with filters, mark-read, mark-all-read, delete, plus WebSocket stream for live updates.
 - API envelope: standardized `{success, data, message}` responses; centralized exception handling.
 
 ## Project Structure
@@ -62,17 +64,55 @@ Seeds roles, specialties, patients, doctors, availability, and sample appointmen
 ```
 Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
 
-## Key Endpoints (prefix `/api/v1`)
-- Auth: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/forgot`, `/auth/reset`
-- Users: `/users/me`, `/users` (admin), `/users/{id}` (admin)
-- Patients: `/patients/me`, `/patients` (admin)
-- Doctors: `/doctors/me/profile`, `/doctors` (public list/admin CRUD), `/doctors/{id}/availability`
-- Appointments: `/appointments/me`, `/appointments/doctor/me`, `/appointments` (book), `/appointments/{id}/cancel`, `/appointments/{id}/reschedule`, `/appointments/{id}/status`
-- Medical Records: `/medical-records/me`, `/medical-records/doctor/me`, `/medical-records/{id}`
-- Billing: `/billing`, `/billing/{id}`, `/billing/me`, `/billing/patient/{id}`, `/billing/policies...`, `/billing/claims...`
-- Chat: `/chat/threads` (list/create), `/chat/threads/{id}/messages` (list/create), WebSocket `/chat/ws/{id}?token=<access-token>`
-- Notifications: `/notifications` (list with filters), `/notifications/{id}` (delete), `/notifications/{id}/read`, `/notifications/read-all`
-  - WebSocket stream: `/notifications/ws?token=<access-token>` (polling push)
+## Key Routes (prefix `/api/v1`) and what they do
+- Auth:
+  - `POST /auth/register` — create account (email/password).
+  - `POST /auth/login` — get access/refresh tokens.
+  - `POST /auth/refresh` — rotate tokens.
+  - `POST /auth/logout` — revoke refresh token.
+  - `POST /auth/forgot` / `POST /auth/reset` — password reset flows.
+- Users:
+  - `GET /users/me` — current user info.
+  - `GET/POST/PATCH/DELETE /users` — admin user management.
+- Patients:
+  - `GET/POST/PATCH /patients/me` — manage your patient profile.
+  - `GET/POST/PATCH/DELETE /patients` — admin management.
+- Doctors:
+  - `GET/POST/PATCH /doctors/me/profile` — manage your doctor profile.
+  - `GET /doctors` — public search/filter (name/specialty/city/rating).
+  - `GET/POST/PATCH/DELETE /doctors/{id}` — admin CRUD.
+  - `GET/POST/PATCH/DELETE /doctors/{id}/availability` — manage time slots.
+  - `GET /doctors/{id}/availability/slots` — calendar-friendly available slots.
+  - Favorites: `POST/DELETE /doctors/{id}/favorite`, `GET /doctors/me/favorites`.
+  - Reviews: `GET/POST /doctors/{id}/reviews`.
+- Appointments:
+  - `POST /appointments` — book.
+  - `GET /appointments/me` — patient view.
+  - `GET /appointments/doctor/me` — doctor view.
+  - `PATCH /appointments/{id}/status` — update status.
+  - `POST /appointments/{id}/cancel` — cancel.
+  - `PATCH /appointments/{id}/reschedule` — reschedule.
+- Medical Records:
+  - `GET/POST /medical-records/me` — patient.
+  - `GET /medical-records/doctor/me` — doctor’s assigned.
+  - `GET/POST/PATCH/DELETE /medical-records/{id}` — manage records.
+- Billing/Insurance:
+  - `GET/POST /billing` — billing entries.
+  - `GET /billing/me` — patient billing.
+  - `GET /billing/patient/{id}` — admin/doctor view.
+  - Policies/claims: `/billing/policies...`, `/billing/claims...`.
+- Chat:
+  - `GET/POST /chat/threads` — list/create thread (patient+doctor).
+  - `GET/POST /chat/threads/{id}/messages` — list/send messages.
+  - `PATCH /chat/messages/{message_id}/read` — mark read (recipient only).
+  - `POST /chat/threads/{id}/attachments` — upload attachment (png/jpg/pdf <=10MB) with optional caption.
+  - WebSocket messaging: `ws://.../api/v1/chat/ws/chat/{thread_id}` with Bearer token (header or `?token`) for real-time messages/read receipts.
+- Notifications:
+  - `GET /notifications` — list (supports `is_read`, `type` filters).
+  - `PATCH /notifications/{id}/read` — mark one read.
+  - `PATCH /notifications/read-all` — mark all read.
+  - `DELETE /notifications/{id}` — delete.
+  - WebSocket stream: `ws://.../api/v1/notifications/ws?token=<access-token>` (polling push for new notifications).
 
 ### Realtime strategy (MVP vs. push)
 - Current: lightweight WebSocket polling for MVP, ok for modest traffic.
