@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.modules.notifications import repository, schemas
+from datetime import datetime
 
 
 def notify(db: Session, payload: schemas.NotificationCreate):
@@ -21,6 +22,10 @@ def list_my_notifications(
     return repository.list_notifications(
         db, user_id=user_id, is_read=is_read, type=type, skip=skip, limit=limit
     )
+
+
+def list_since(db: Session, user_id: UUID, since: datetime, limit: int = 50):
+    return repository.list_notifications_since(db, user_id=user_id, since=since, limit=limit)
 
 
 def mark_notification_read(db: Session, notification_id: UUID, user_id: UUID):

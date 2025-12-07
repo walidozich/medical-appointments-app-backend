@@ -72,6 +72,15 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
 - Billing: `/billing`, `/billing/{id}`, `/billing/me`, `/billing/patient/{id}`, `/billing/policies...`, `/billing/claims...`
 - Chat: `/chat/threads` (list/create), `/chat/threads/{id}/messages` (list/create), WebSocket `/chat/ws/{id}?token=<access-token>`
 - Notifications: `/notifications` (list with filters), `/notifications/{id}` (delete), `/notifications/{id}/read`, `/notifications/read-all`
+  - WebSocket stream: `/notifications/ws?token=<access-token>` (polling push)
+
+### Realtime strategy (MVP vs. push)
+- Current: lightweight WebSocket polling for MVP, ok for modest traffic.
+- Switch to true push (FCM/APNs/WebPush) if:
+  - Active chat needs <500ms delivery
+  - Instant appointment change updates are required
+  - You plan for 10k+ concurrent clients
+  - Mobile apps where polling/WebSockets would drain battery
 
 ## Roles & Access
 - Admin: full access.

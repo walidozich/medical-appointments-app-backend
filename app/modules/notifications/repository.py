@@ -1,5 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
+from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.modules.notifications import models
@@ -28,6 +29,22 @@ def list_notifications(
     if type:
         query = query.filter(models.Notification.type == type)
     return query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+
+
+def list_notifications_since(
+    db: Session,
+    user_id: UUID,
+    since: datetime,
+    *,
+    limit: int = 50,
+) -> List[models.Notification]:
+    return (
+        db.query(models.Notification)
+        .filter(models.Notification.user_id == user_id, models.Notification.created_at > since)
+        .order_by(models.Notification.created_at.asc())
+        .limit(limit)
+        .all()
+    )
 
 
 def mark_read(db: Session, notification_id: UUID, user_id: UUID) -> models.Notification | None:
