@@ -68,14 +68,38 @@ def get_or_create_thread(db: Session, current_user, payload: schemas.ChatThreadC
     return thread
 
 
-def list_threads(db: Session, current_user) -> List:
+def list_threads(
+    db: Session,
+    current_user,
+    *,
+    search: str | None = None,
+    sort_recent: bool = False,
+    status: str | None = None,
+    include_archived: bool = True,
+) -> List:
     role = getattr(current_user, "role_name", "").upper()
     if role == "PATIENT":
         patient = _get_patient(db, current_user.id)
-        return repository.list_threads_for_patient(db, patient_id=patient.id)
+        return repository.search_threads(
+            db,
+            user_role="PATIENT",
+            user_profile_id=patient.id,
+            search=search,
+            sort_recent=sort_recent,
+            status=status,
+            include_archived=include_archived,
+        )
     if role == "DOCTOR":
         doctor = _get_doctor(db, current_user.id)
-        return repository.list_threads_for_doctor(db, doctor_id=doctor.id)
+        return repository.search_threads(
+            db,
+            user_role="DOCTOR",
+            user_profile_id=doctor.id,
+            search=search,
+            sort_recent=sort_recent,
+            status=status,
+            include_archived=include_archived,
+        )
     return []
 
 
@@ -95,6 +119,24 @@ def list_messages(db: Session, current_user, thread_id: UUID, skip: int = 0, lim
     else:
         raise ValueError("Not allowed")
     return repository.list_messages(db, thread_id=thread.id, skip=skip, limit=limit)
+
+
+def search_messages(db: Session, current_user, thread_id: UUID, query: str, skip: int = 0, limit: int = 50):
+    thread = repository.get_thread(db, thread_id=thread_id)
+    if not thread:
+        raise ValueError("Thread not found")
+    role = getattr(current_user, "role_name", "").upper()
+    if role == "PATIENT":
+        patient = _get_patient(db, current_user.id)
+        if thread.patient_id != patient.id:
+            raise ValueError("Not a participant in this thread")
+    elif role == "DOCTOR":
+        doctor = _get_doctor(db, current_user.id)
+        if thread.doctor_id != doctor.id:
+            raise ValueError("Not a participant in this thread")
+    else:
+        raise ValueError("Not allowed")
+    return repository.search_messages(db, thread_id=thread.id, query=query, skip=skip, limit=limit)
 
 
 def post_message(db: Session, current_user, thread_id: UUID, msg_in: schemas.ChatMessageCreate):
@@ -207,6 +249,17 @@ def update_thread_status(db: Session, current_user, thread_id: UUID, status: str
     # open/closed is global
     thread = repository.update_thread_status(db, thread=thread, status=status)
     return thread
+
+
+def unread_count(db: Session, current_user):
+    role = getattr(current_user, "role_name", "").upper()
+    if role == "PATIENT":
+        patient = _get_patient(db, current_user.id)
+        return repository.unread_count_for_user(db, user_role="PATIENT", user_profile_id=patient.id, user_id=current_user.id)
+    if role == "DOCTOR":
+        doctor = _get_doctor(db, current_user.id)
+        return repository.unread_count_for_user(db, user_role="DOCTOR", user_profile_id=doctor.id, user_id=current_user.id)
+    return 0
 
 
 ALLOWED_FILE_TYPES = {"image/png", "image/jpeg", "image/jpg", "application/pdf"}

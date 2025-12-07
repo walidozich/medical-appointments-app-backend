@@ -21,11 +21,22 @@ router = APIRouter()
 
 @router.get("/threads", response_model=List[schemas.ChatThreadRead])
 def list_threads(
+    search: str | None = None,
+    sort: str | None = None,
+    status: str | None = None,
+    include_archived: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     try:
-        return service.list_threads(db, current_user)
+        return service.list_threads(
+            db,
+            current_user,
+            search=search,
+            sort_recent=(sort == "recent"),
+            status=status,
+            include_archived=include_archived,
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -212,6 +223,29 @@ def upload_attachment(
         return msg
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/threads/{thread_id}/messages/search", response_model=List[schemas.ChatMessageRead])
+def search_messages(
+    thread_id: UUID,
+    query: str,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    try:
+        return service.search_messages(db, current_user, thread_id=thread_id, query=query, skip=skip, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/threads/unread-count", response_model=int)
+def unread_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return service.unread_count(db, current_user)
 
 
 @router.patch("/threads/{thread_id}/status", response_model=schemas.ChatThreadRead)

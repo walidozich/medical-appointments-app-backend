@@ -1,6 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
 
 from app.modules.chat import models
 
@@ -25,6 +26,42 @@ def list_threads_for_doctor(db: Session, doctor_id: UUID) -> List[models.ChatThr
     return db.query(models.ChatThread).filter(models.ChatThread.doctor_id == doctor_id).all()
 
 
+def search_threads(
+    db: Session,
+    *,
+    user_role: str,
+    user_profile_id: UUID,
+    search: str | None = None,
+    sort_recent: bool = False,
+    status: str | None = None,
+    include_archived: bool = True,
+) -> List[models.ChatThread]:
+    query = db.query(models.ChatThread)
+    if user_role == "PATIENT":
+        query = query.filter(models.ChatThread.patient_id == user_profile_id)
+    else:
+        query = query.filter(models.ChatThread.doctor_id == user_profile_id)
+
+    if status and status != "archived":
+        query = query.filter(models.ChatThread.status == status)
+    if not include_archived:
+        query = query.outerjoin(
+            models.ChatThreadPreference,
+            (models.ChatThreadPreference.thread_id == models.ChatThread.id)
+            & (models.ChatThreadPreference.user_id == user_profile_id),
+        ).filter(or_(models.ChatThreadPreference.id.is_(None), models.ChatThreadPreference.is_archived.is_(False)))
+    if search:
+        like = f"%{search.lower()}%"
+        query = query.join(models.ChatMessage, models.ChatMessage.thread_id == models.ChatThread.id, isouter=True).filter(
+            or_(
+                func.lower(models.ChatMessage.content).like(like),
+            )
+        )
+    if sort_recent:
+        query = query.order_by(models.ChatThread.updated_at.desc())
+    return query.distinct().all()
+
+
 def create_thread(db: Session, *, patient_id: UUID, doctor_id: UUID) -> models.ChatThread:
     thread = models.ChatThread(patient_id=patient_id, doctor_id=doctor_id)
     db.add(thread)
@@ -45,6 +82,21 @@ def list_messages(db: Session, thread_id: UUID, skip: int = 0, limit: int = 50) 
     return (
         db.query(models.ChatMessage)
         .filter(models.ChatMessage.thread_id == thread_id)
+        .order_by(models.ChatMessage.sent_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def search_messages(db: Session, thread_id: UUID, query: str, skip: int = 0, limit: int = 50) -> List[models.ChatMessage]:
+    like = f"%{query.lower()}%"
+    return (
+        db.query(models.ChatMessage)
+        .filter(
+            models.ChatMessage.thread_id == thread_id,
+            func.lower(models.ChatMessage.content).like(like),
+        )
         .order_by(models.ChatMessage.sent_at.desc())
         .offset(skip)
         .limit(limit)
@@ -89,6 +141,17 @@ def mark_message_read(db: Session, message: models.ChatMessage) -> models.ChatMe
         db.commit()
         db.refresh(message)
     return message
+
+
+def unread_count_for_user(db: Session, *, user_role: str, user_profile_id: UUID, user_id: UUID) -> int:
+    # Count messages in threads where the user is a participant and sender_id != user_id and read_at is null
+    query = db.query(func.count(models.ChatMessage.id)).join(models.ChatThread, models.ChatThread.id == models.ChatMessage.thread_id)
+    if user_role == "PATIENT":
+        query = query.filter(models.ChatThread.patient_id == user_profile_id)
+    else:
+        query = query.filter(models.ChatThread.doctor_id == user_profile_id)
+    query = query.filter(models.ChatMessage.sender_id != user_id, models.ChatMessage.read_at.is_(None))
+    return query.scalar() or 0
 
 
 def get_or_create_pref(db: Session, user_id: UUID, thread_id: UUID) -> models.ChatThreadPreference:
