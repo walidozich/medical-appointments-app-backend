@@ -70,6 +70,7 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
 - Appointments: `/appointments/me`, `/appointments/doctor/me`, `/appointments` (book), `/appointments/{id}/cancel`, `/appointments/{id}/reschedule`, `/appointments/{id}/status`
 - Medical Records: `/medical-records/me`, `/medical-records/doctor/me`, `/medical-records/{id}`
 - Billing: `/billing`, `/billing/{id}`, `/billing/me`, `/billing/patient/{id}`, `/billing/policies...`, `/billing/claims...`
+- Chat: `/chat/threads` (list/create), `/chat/threads/{id}/messages` (list/create), WebSocket `/chat/ws/{id}?token=<access-token>`
 
 ## Roles & Access
 - Admin: full access.

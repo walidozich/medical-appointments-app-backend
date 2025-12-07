@@ -11,6 +11,7 @@ from app.modules.appointments.models import Appointment
 from app.modules.doctors.models import Doctor, DoctorAvailability, Specialty, FavoriteDoctor, Review
 from app.modules.patients.models import Patient
 from app.modules.users.models import Role, User
+from app.modules.chat.models import ChatThread, ChatMessage
 
 DEFAULT_PASSWORD = "Algeria123!"
 _fallback_bcrypt_used = False
@@ -190,6 +191,14 @@ REVIEWS = [
     ("sofiane.rahmani@example.dz", "nadia.khellaf@example.dz", 4, "Consultation rapide, traitement efficace."),
     ("sara.bouzid@example.dz", "yacine.chekkal@example.dz", 5, "Excellent avec les enfants, très patient."),
     ("hakim.cheriet@example.dz", "mourad.aitali@example.dz", 4, "Bon diagnostic et conseils pratiques."),
+]
+
+CHAT_THREADS = FAVORITES  # reuse patient->doctor pairs
+CHAT_MESSAGES = [
+    ("amina.benali@example.dz", "samir.bensalah@example.dz", "Bonjour docteur, j'ai reçu mes analyses."),
+    ("samir.bensalah@example.dz", "amina.benali@example.dz", "Bonjour Amina, envoyez-les moi et on vérifie."),
+    ("sara.bouzid@example.dz", "yacine.chekkal@example.dz", "Docteur, mon fils tousse encore."),
+    ("yacine.chekkal@example.dz", "sara.bouzid@example.dz", "Surveillez la fièvre, sinon passez demain."),
 ]
 
 
@@ -442,6 +451,76 @@ def recompute_doctor_ratings(db: Session):
     db.commit()
 
 
+def ensure_thread(db: Session, patient_email: str, doctor_email: str) -> ChatThread | None:
+    patient_user = db.execute(select(User).where(User.email == patient_email)).scalar_one_or_none()
+    doctor_user = db.execute(select(User).where(User.email == doctor_email)).scalar_one_or_none()
+    if not patient_user or not doctor_user:
+        print(f"Skip thread: missing user ({patient_email}, {doctor_email})")
+        return None
+    patient = db.execute(select(Patient).where(Patient.user_id == patient_user.id)).scalar_one_or_none()
+    doctor = db.execute(select(Doctor).where(Doctor.user_id == doctor_user.id)).scalar_one_or_none()
+    if not patient or not doctor:
+        print(f"Skip thread: missing profile ({patient_email}, {doctor_email})")
+        return None
+    existing = db.execute(
+        select(ChatThread).where(
+            ChatThread.patient_id == patient.id,
+            ChatThread.doctor_id == doctor.id,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+    thread = ChatThread(patient_id=patient.id, doctor_id=doctor.id)
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+    print(f"Chat thread created: {patient_email} <-> {doctor_email}")
+    return thread
+
+
+def ensure_message(db: Session, sender_email: str, receiver_email: str, content: str):
+    sender_user = db.execute(select(User).where(User.email == sender_email)).scalar_one_or_none()
+    receiver_user = db.execute(select(User).where(User.email == receiver_email)).scalar_one_or_none()
+    if not sender_user or not receiver_user:
+        print(f"Skip message: missing user ({sender_email} -> {receiver_email})")
+        return
+    # Determine patient/doctor and thread
+    sender_role = getattr(sender_user, "role_name", None)
+    receiver_role = getattr(receiver_user, "role_name", None)
+    if sender_role == "PATIENT":
+        patient_user = sender_user
+        doctor_user = receiver_user
+    elif sender_role == "DOCTOR":
+        patient_user = receiver_user
+        doctor_user = sender_user
+    else:
+        print(f"Skip message: unsupported role for {sender_email}")
+        return
+    thread = ensure_thread(db, patient_email=patient_user.email, doctor_email=doctor_user.email)
+    if not thread:
+        return
+    # avoid duplicate exact message
+    exists = db.execute(
+        select(ChatMessage).where(
+            ChatMessage.thread_id == thread.id,
+            ChatMessage.sender_id == sender_user.id,
+            ChatMessage.content == content,
+        )
+    ).scalar_one_or_none()
+    if exists:
+        return
+    msg = ChatMessage(
+        thread_id=thread.id,
+        sender_id=sender_user.id,
+        sender_role=sender_role or "",
+        content=content,
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    print(f"Chat message added: {sender_email} -> {receiver_email}")
+
+
 def seed():
     db = SessionLocal()
     try:
@@ -479,6 +558,11 @@ def seed():
             ensure_review(db, patient_email=rev[0], doctor_email=rev[1], rating=rev[2], comment=rev[3])
 
         recompute_doctor_ratings(db)
+
+        for pt_doc in CHAT_THREADS:
+            ensure_thread(db, patient_email=pt_doc[0], doctor_email=pt_doc[1])
+        for msg in CHAT_MESSAGES:
+            ensure_message(db, sender_email=msg[0], receiver_email=msg[1], content=msg[2])
         if _fallback_bcrypt_used:
             print("Used bcrypt fallback for password hashing (passlib backend unavailable for long-secret check).")
     finally:
