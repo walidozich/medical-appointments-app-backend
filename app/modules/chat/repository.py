@@ -44,8 +44,24 @@ def list_messages(db: Session, thread_id: UUID, skip: int = 0, limit: int = 50) 
     )
 
 
-def add_message(db: Session, *, thread_id: UUID, sender_id: UUID, sender_role: str, content: str) -> models.ChatMessage:
-    msg = models.ChatMessage(thread_id=thread_id, sender_id=sender_id, sender_role=sender_role, content=content)
+def add_message(
+    db: Session,
+    *,
+    thread_id: UUID,
+    sender_id: UUID,
+    sender_role: str,
+    content: str | None = None,
+    file_url: str | None = None,
+    file_type: str | None = None,
+) -> models.ChatMessage:
+    msg = models.ChatMessage(
+        thread_id=thread_id,
+        sender_id=sender_id,
+        sender_role=sender_role,
+        content=content,
+        file_url=file_url,
+        file_type=file_type,
+    )
     db.add(msg)
     db.commit()
     db.refresh(msg)

@@ -8,6 +8,9 @@ from app.modules.patients import repository as patients_repository
 from app.modules.doctors import repository as doctors_repository
 from app.modules.notifications import service as notifications_service, schemas as notif_schemas
 from app.modules.chat import models as chat_models
+from app.utils.storage import LocalStorage
+from fastapi import UploadFile
+from typing import Optional
 
 
 def _get_patient(db: Session, user_id: UUID):
@@ -117,7 +120,7 @@ def post_message(db: Session, current_user, thread_id: UUID, msg_in: schemas.Cha
                 user_id=recipient_user_id,
                 type="CHAT",
                 title="New message",
-                body=msg_in.content[:200],
+                body=(msg_in.content or "")[:200],
             ),
         )
     return message
@@ -157,4 +160,70 @@ def mark_message_read(db: Session, current_user, message_id: UUID, on_broadcast:
         except Exception:
             # don't fail the API on broadcast issues
             pass
+    return msg
+
+
+ALLOWED_FILE_TYPES = {"image/png", "image/jpeg", "image/jpg", "application/pdf"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+def upload_attachment(
+    db: Session,
+    current_user,
+    thread_id: UUID,
+    file: UploadFile,
+    caption: Optional[str] = None,
+    storage: Optional[LocalStorage] = None,
+):
+    storage = storage or LocalStorage()
+    thread = repository.get_thread(db, thread_id=thread_id)
+    if not thread:
+        raise ValueError("Thread not found")
+
+    role = getattr(current_user, "role_name", "").upper()
+    if role == "PATIENT":
+        patient = _get_patient(db, current_user.id)
+        if thread.patient_id != patient.id:
+            raise ValueError("Not a participant")
+        sender_role = "PATIENT"
+        recipient_user_id = getattr(thread.doctor, "user_id", None) if getattr(thread, "doctor", None) else None
+    elif role == "DOCTOR":
+        doctor = _get_doctor(db, current_user.id)
+        if thread.doctor_id != doctor.id:
+            raise ValueError("Not a participant")
+        sender_role = "DOCTOR"
+        recipient_user_id = getattr(thread.patient, "user_id", None) if getattr(thread, "patient", None) else None
+    else:
+        raise ValueError("Not allowed")
+
+    if file.content_type not in ALLOWED_FILE_TYPES:
+        raise ValueError("Unsupported file type")
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    file.file.seek(0)
+    if size > MAX_FILE_SIZE:
+        raise ValueError("File too large")
+
+    file_url = storage.save(file.file, file.filename or "upload.bin")
+    msg = repository.add_message(
+        db,
+        thread_id=thread.id,
+        sender_id=current_user.id,
+        sender_role=sender_role,
+        content=caption,
+        file_url=file_url,
+        file_type=file.content_type,
+    )
+
+    if recipient_user_id:
+        notifications_service.notify(
+            db,
+            notif_schemas.NotificationCreate(
+                user_id=recipient_user_id,
+                type="CHAT",
+                title="New attachment",
+                body=caption or file.filename,
+            ),
+        )
+
     return msg

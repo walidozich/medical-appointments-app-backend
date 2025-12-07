@@ -21,7 +21,7 @@ class ChatThreadRead(BaseModel):
 
 
 class ChatMessageCreate(BaseModel):
-    content: str = Field(min_length=1, max_length=2000)
+    content: Optional[str] = Field(default=None, max_length=2000)
 
 
 class ChatMessageRead(BaseModel):
@@ -29,7 +29,9 @@ class ChatMessageRead(BaseModel):
     thread_id: UUID
     sender_id: UUID
     sender_role: str
-    content: str
+    content: Optional[str] = None
+    file_url: Optional[str] = None
+    file_type: Optional[str] = None
     sent_at: datetime
     read_at: Optional[datetime] = None
     is_system_message: bool
@@ -39,3 +41,7 @@ class ChatMessageRead(BaseModel):
 
 class ChatThreadWithMessages(ChatThreadRead):
     messages: List[ChatMessageRead] = []
+
+
+class ChatAttachmentUpload(BaseModel):
+    caption: Optional[str] = None

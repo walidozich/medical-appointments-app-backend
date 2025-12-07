@@ -28,7 +28,9 @@ class ChatMessage(Base):
     thread_id = Column(UUID(as_uuid=True), ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False, index=True)
     sender_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     sender_role = Column(String(20), nullable=False)  # PATIENT or DOCTOR
-    content = Column(String(2000), nullable=False)
+    content = Column(String(2000), nullable=True)
+    file_url = Column(String(1000), nullable=True)
+    file_type = Column(String(50), nullable=True)  # mime type or logical type
     sent_at = Column(DateTime(timezone=True), server_default=func.now())
     read_at = Column(DateTime(timezone=True), nullable=True)
     is_system_message = Column(Boolean, default=False, nullable=False)

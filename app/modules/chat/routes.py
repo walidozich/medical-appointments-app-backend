@@ -2,6 +2,7 @@ from typing import List, Dict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db, get_current_active_user, require_roles
@@ -188,6 +189,21 @@ def mark_message_read(
             message_id=message_id,
             on_broadcast=lambda m: manager.broadcast(m.thread_id, _serialize_message(m)),
         )
+        return msg
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/threads/{thread_id}/attachments", response_model=schemas.ChatMessageRead, status_code=status.HTTP_201_CREATED)
+def upload_attachment(
+    thread_id: UUID,
+    file: UploadFile = File(...),
+    caption: str | None = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    try:
+        msg = service.upload_attachment(db, current_user, thread_id=thread_id, file=file, caption=caption)
         return msg
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
