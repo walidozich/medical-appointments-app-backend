@@ -10,8 +10,8 @@ Backend for a medical appointments management app, aligned to the project specif
 - Appointments: booking, conflict checks, reschedule, cancel; statuses `SCHEDULED/COMPLETED/CANCELLED`; availability slot generation.
 - Medical Records: diagnoses, treatment plan, prescriptions; doctor/patient scoped access.
 - Billing/Insurance: billing entries linked to appointments/patients, insurance policies, claims.
-- Chat: threads, messages, read receipts, attachments (png/jpg/pdf up to 10MB), WebSocket real-time delivery.
-- Notifications: in-app notifications with filters, mark-read, mark-all-read, delete, plus WebSocket stream for live updates.
+- Chat: threads, lifecycle (open/closed), per-user archive, messages, read receipts, attachments (png/jpg/pdf up to 10MB), WebSocket real-time delivery, notifications on thread creation/message sent/message read.
+- Notifications: in-app notifications with filters, mark-read, mark-all-read, delete, plus WebSocket stream for live updates; chat events auto-generate notifications.
 - API envelope: standardized `{success, data, message}` responses; centralized exception handling.
 
 ## Project Structure
@@ -103,6 +103,7 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
   - Policies/claims: `/billing/policies...`, `/billing/claims...`.
 - Chat:
   - `GET/POST /chat/threads` — list/create thread (patient+doctor).
+  - `PATCH /chat/threads/{id}/status` — update thread status (`open/closed` global, `archived` per-user).
   - `GET/POST /chat/threads/{id}/messages` — list/send messages.
   - `PATCH /chat/messages/{message_id}/read` — mark read (recipient only).
   - `POST /chat/threads/{id}/attachments` — upload attachment (png/jpg/pdf <=10MB) with optional caption.
