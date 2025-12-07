@@ -50,3 +50,18 @@ def add_message(db: Session, *, thread_id: UUID, sender_id: UUID, sender_role: s
     db.commit()
     db.refresh(msg)
     return msg
+
+
+def get_message(db: Session, message_id: UUID) -> Optional[models.ChatMessage]:
+    return db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id).first()
+
+
+def mark_message_read(db: Session, message: models.ChatMessage) -> models.ChatMessage:
+    from datetime import datetime, timezone
+
+    if not message.read_at:
+        message.read_at = datetime.now(timezone.utc)
+        db.add(message)
+        db.commit()
+        db.refresh(message)
+    return message

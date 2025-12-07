@@ -1,15 +1,15 @@
-from typing import List
+from typing import List, Dict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db, get_current_active_user, require_roles
-from app.modules.chat import service, schemas
+from app.core import security
+from app.modules.chat import service, schemas, models as chat_models
+from app.modules.chat.repository import get_thread, add_message
 from app.modules.users.models import User
 from app.modules.users import repository as users_repository
-from app.core import security
-from app.modules.chat.repository import get_thread
 from app.modules.patients import repository as patients_repository
 from app.modules.doctors import repository as doctors_repository
 
@@ -69,18 +69,22 @@ def post_message(
 
 # Simple in-memory connection manager (per-process)
 class ConnectionManager:
+    """Tracks active websocket connections per thread."""
+
     def __init__(self):
-        self.active: dict[UUID, list[WebSocket]] = {}
+        self.active: Dict[UUID, List[WebSocket]] = {}
 
     async def connect(self, thread_id: UUID, websocket: WebSocket):
         await websocket.accept()
         self.active.setdefault(thread_id, []).append(websocket)
 
     def disconnect(self, thread_id: UUID, websocket: WebSocket):
-        if thread_id in self.active:
-            self.active[thread_id] = [ws for ws in self.active[thread_id] if ws is not websocket]
-            if not self.active[thread_id]:
-                self.active.pop(thread_id, None)
+        conns = self.active.get(thread_id)
+        if not conns:
+            return
+        self.active[thread_id] = [ws for ws in conns if ws is not websocket]
+        if not self.active[thread_id]:
+            self.active.pop(thread_id, None)
 
     async def broadcast(self, thread_id: UUID, message: dict):
         for ws in self.active.get(thread_id, []):
@@ -90,21 +94,54 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-@router.websocket("/ws/{thread_id}")
+def _serialize_message(msg: chat_models.ChatMessage) -> dict:
+    return {
+        "id": str(msg.id),
+        "thread_id": str(msg.thread_id),
+        "sender_id": str(msg.sender_id),
+        "sender_role": msg.sender_role,
+        "content": msg.content,
+        "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
+        "read_at": msg.read_at.isoformat() if msg.read_at else None,
+        "is_system_message": msg.is_system_message,
+    }
+
+
+def _extract_token(websocket: WebSocket) -> str | None:
+    auth_header = websocket.headers.get("authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        return auth_header.split(" ", 1)[1].strip()
+    return websocket.query_params.get("token")
+
+
+def _ensure_participant(db: Session, user_id: UUID, thread: chat_models.ChatThread) -> str:
+    user = users_repository.get_by_id(db, user_id=user_id)
+    if not user:
+        raise PermissionError("User not found")
+    role = (user.role_name or "").upper()
+    if role == "PATIENT":
+        patient = patients_repository.get_by_user_id(db, user_id=user_id)
+        if not patient or patient.id != thread.patient_id:
+            raise PermissionError("Not a participant")
+        return "PATIENT"
+    if role == "DOCTOR":
+        doctor = doctors_repository.get_doctor_by_user(db, user_id=user_id)
+        if not doctor or doctor.id != thread.doctor_id:
+            raise PermissionError("Not a participant")
+        return "DOCTOR"
+    raise PermissionError("Not allowed")
+
+
+@router.websocket("/ws/chat/{thread_id}")
 async def websocket_chat(websocket: WebSocket, thread_id: UUID, db: Session = Depends(get_db)):
-    # Expect access token in query params: ?token=...
-    token = websocket.query_params.get("token")
+    token = _extract_token(websocket)
     if not token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     try:
         payload = security.decode_token(token)
-        user_id = payload.get("sub")
+        user_id = UUID(str(payload.get("sub")))
     except Exception:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    user = users_repository.get_by_id(db, user_id)
-    if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -112,44 +149,26 @@ async def websocket_chat(websocket: WebSocket, thread_id: UUID, db: Session = De
     if not thread:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
-
-    role = getattr(user, "role_name", "").upper()
-    if role == "PATIENT":
-        patient = patients_repository.get_by_user_id(db, user.id)
-        if not patient or patient.id != thread.patient_id:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-    elif role == "DOCTOR":
-        doctor = doctors_repository.get_doctor_by_user(db, user_id=user.id)
-        if not doctor or doctor.id != thread.doctor_id:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-    else:
+    try:
+        sender_role = _ensure_participant(db, user_id, thread)
+    except PermissionError:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
-    await manager.connect(thread_id, websocket)
 
+    await manager.connect(thread_id, websocket)
     try:
         while True:
             data = await websocket.receive_json()
             content = data.get("content")
             if not content:
                 continue
-            try:
-                msg = service.post_message(db, user, thread_id=thread_id, msg_in=schemas.ChatMessageCreate(content=content))
-            except ValueError:
-                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-                return
-            await manager.broadcast(
-                thread_id,
-                {
-                    "id": str(msg.id),
-                    "thread_id": str(msg.thread_id),
-                    "sender_id": str(msg.sender_id),
-                    "sender_role": msg.sender_role,
-                    "content": msg.content,
-                    "sent_at": msg.sent_at.isoformat(),
-                },
+            msg = add_message(
+                db,
+                thread_id=thread.id,
+                sender_id=user_id,
+                sender_role=sender_role,
+                content=content,
             )
+            await manager.broadcast(thread_id, _serialize_message(msg))
     except WebSocketDisconnect:
         manager.disconnect(thread_id, websocket)
