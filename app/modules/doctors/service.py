@@ -1,12 +1,51 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from uuid import UUID
 from typing import List
 from datetime import datetime, date, timedelta, timezone
 
-from app.modules.doctors import repository, schemas
+from app.modules.doctors import repository, schemas, models as doctor_models
 from app.modules.users import repository as users_repository
 from app.modules.patients import repository as patients_repository
 from app.modules.appointments import repository as appointments_repository
+
+
+def list_specialties(db: Session, skip: int = 0, limit: int = 100):
+    return repository.list_specialties(db, skip=skip, limit=limit)
+
+
+def create_specialty(db: Session, payload: schemas.SpecialtyCreate):
+    data = payload.model_dump()
+    # enforce unique name (case-insensitive)
+    existing = db.query(doctor_models.Specialty).filter(
+        doctor_models.Specialty.name.ilike(payload.name)
+    ).first()
+    if existing:
+        raise ValueError("Specialty already exists")
+    return repository.create_specialty(db, data)
+
+
+def update_specialty(db: Session, specialty_id: int, payload: schemas.SpecialtyUpdate):
+    spec = repository.get_specialty(db, specialty_id=specialty_id)
+    if not spec:
+        raise ValueError("Specialty not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "name" in updates and updates["name"]:
+        dup = db.query(doctor_models.Specialty).filter(
+            doctor_models.Specialty.id != spec.id,
+            doctor_models.Specialty.name.ilike(updates["name"]),
+        ).first()
+        if dup:
+            raise ValueError("Specialty name already exists")
+    return repository.update_specialty(db, specialty=spec, updates=updates)
+
+
+def delete_specialty(db: Session, specialty_id: int):
+    spec = repository.get_specialty(db, specialty_id=specialty_id)
+    if not spec:
+        raise ValueError("Specialty not found")
+    repository.delete_specialty(db, spec)
+    return True
 
 
 def _ensure_user_is_doctor(db: Session, user_id: UUID):
@@ -212,3 +251,40 @@ def add_review(db: Session, doctor_id: UUID, user_id: UUID, review_in: schemas.R
 def list_reviews(db: Session, doctor_id: UUID):
     doctor = get_doctor(db, doctor_id)
     return repository.list_reviews(db, doctor.id)
+
+
+def list_reviews_admin(
+    db: Session,
+    *,
+    doctor_id: UUID | None = None,
+    patient_id: UUID | None = None,
+    skip: int = 0,
+    limit: int = 100,
+):
+    return repository.list_all_reviews(db, doctor_id=doctor_id, patient_id=patient_id, skip=skip, limit=limit)
+
+
+def _recompute_doctor_rating(db: Session, doctor_id: UUID):
+    stats = (
+        db.query(func.count(doctor_models.Review.id), func.avg(doctor_models.Review.rating))
+        .filter(doctor_models.Review.doctor_id == doctor_id)
+        .one()
+    )
+    doc = db.query(doctor_models.Doctor).filter(doctor_models.Doctor.id == doctor_id).first()
+    if doc:
+        doc.rating_count = int(stats[0] or 0)
+        doc.avg_rating = float(stats[1] or 0)
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+
+def delete_review_admin(db: Session, review_id: UUID):
+    review = repository.get_review(db, review_id=review_id)
+    if not review:
+        raise ValueError("Review not found")
+    doctor_id = review.doctor_id
+    repository.delete_review(db, review)
+    if doctor_id:
+        _recompute_doctor_rating(db, doctor_id)
+    return True
