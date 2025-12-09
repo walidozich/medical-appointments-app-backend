@@ -27,11 +27,25 @@ def get_by_id(db: Session, user_id):
     return db.query(user_models.User).filter(user_models.User.id == user_id).first()
 
 
-def create_user(db: Session, *, email: str, password_hash: str, role_name: str | None = None):
+def create_user(
+    db: Session,
+    *,
+    email: str,
+    password_hash: str,
+    role_name: str | None = None,
+    is_active: bool = True,
+    is_superuser: bool = False,
+):
     role_obj = get_role_by_name(db, role_name) if role_name else None
     if not role_obj:
         role_obj = get_default_role(db)
-    user = user_models.User(email=email, password_hash=password_hash, role_id=role_obj.id)
+    user = user_models.User(
+        email=email,
+        password_hash=password_hash,
+        role_id=role_obj.id,
+        is_active=is_active,
+        is_superuser=is_superuser,
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

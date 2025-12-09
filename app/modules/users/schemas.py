@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from uuid import UUID
 
 
@@ -29,3 +29,11 @@ class UserUpdate(BaseModel):
     role: str | None = None
     is_active: bool | None = None
     is_superuser: bool | None = None
+
+
+class UserCreateAdmin(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+    role: str | None = None
+    is_active: bool | None = True
+    is_superuser: bool | None = False
