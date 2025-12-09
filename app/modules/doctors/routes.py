@@ -12,6 +12,55 @@ from app.modules.users.models import User
 router = APIRouter()
 
 
+@router.get("/specialties", response_model=List[schemas.SpecialtyRead])
+def list_specialties(
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 100,
+    admin_user: User = Depends(require_roles("ADMIN")),
+):
+    return service.list_specialties(db, skip=skip, limit=limit)
+
+
+@router.post("/specialties", response_model=schemas.SpecialtyRead, status_code=status.HTTP_201_CREATED)
+def create_specialty(
+    payload: schemas.SpecialtyCreate,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_roles("ADMIN")),
+):
+    try:
+        return service.create_specialty(db, payload=payload)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/specialties/{specialty_id}", response_model=schemas.SpecialtyRead)
+def update_specialty(
+    specialty_id: int,
+    payload: schemas.SpecialtyUpdate,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_roles("ADMIN")),
+):
+    try:
+        return service.update_specialty(db, specialty_id=specialty_id, payload=payload)
+    except ValueError as e:
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in str(e).lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=str(e))
+
+
+@router.delete("/specialties/{specialty_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_specialty(
+    specialty_id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_roles("ADMIN")),
+):
+    try:
+        service.delete_specialty(db, specialty_id=specialty_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return None
+
+
 @router.get("/", response_model=List[schemas.DoctorRead])
 def list_doctors(
     db: Session = Depends(get_db),
@@ -251,3 +300,31 @@ def add_review(
         return service.add_review(db, doctor_id=doctor_id, user_id=current_user.id, review_in=payload)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/admin/reviews", response_model=List[schemas.ReviewRead])
+def list_reviews_admin(
+    doctor_id: UUID | None = None,
+    patient_id: UUID | None = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_roles("ADMIN")),
+):
+    try:
+        return service.list_reviews_admin(db, doctor_id=doctor_id, patient_id=patient_id, skip=skip, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/admin/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_review_admin(
+    review_id: UUID,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_roles("ADMIN")),
+):
+    try:
+        service.delete_review_admin(db, review_id=review_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return None

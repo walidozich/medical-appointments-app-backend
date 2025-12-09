@@ -9,6 +9,7 @@ from app.modules.medical_records.routes import router as medical_records_router
 from app.modules.billing.routes import router as billing_router
 from app.modules.chat.routes import router as chat_router
 from app.modules.notifications.routes import router as notifications_router
+from app.modules.admin.routes import router as admin_router
 
 api_router = APIRouter()
 
@@ -21,6 +22,7 @@ api_router.include_router(medical_records_router, prefix="/medical-records", tag
 api_router.include_router(billing_router, prefix="/billing", tags=["Billing"])
 api_router.include_router(chat_router, prefix="/chat", tags=["Chat"])
 api_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
+api_router.include_router(admin_router, prefix="/admin", tags=["Admin"])
 
 
 @api_router.get("/health", tags=["Meta"])

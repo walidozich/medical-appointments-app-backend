@@ -172,3 +172,60 @@ def create_review(db: Session, *, patient_id: UUID, doctor_id: UUID, rating: int
 
 def list_reviews(db: Session, doctor_id: UUID):
     return db.query(models.Review).filter(models.Review.doctor_id == doctor_id).order_by(models.Review.created_at.desc()).all()
+
+
+def get_review(db: Session, review_id: UUID):
+    return db.query(models.Review).filter(models.Review.id == review_id).first()
+
+
+# Specialty admin helpers
+def list_specialties(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Specialty).order_by(models.Specialty.name.asc()).offset(skip).limit(limit).all()
+
+
+def get_specialty(db: Session, specialty_id: int):
+    return db.query(models.Specialty).filter(models.Specialty.id == specialty_id).first()
+
+
+def create_specialty(db: Session, data: dict):
+    spec = models.Specialty(**data)
+    db.add(spec)
+    db.commit()
+    db.refresh(spec)
+    return spec
+
+
+def update_specialty(db: Session, specialty: models.Specialty, updates: dict):
+    for field, value in updates.items():
+        if value is not None:
+            setattr(specialty, field, value)
+    db.add(specialty)
+    db.commit()
+    db.refresh(specialty)
+    return specialty
+
+
+def delete_specialty(db: Session, specialty: models.Specialty):
+    db.delete(specialty)
+    db.commit()
+
+
+def list_all_reviews(
+    db: Session,
+    *,
+    doctor_id: UUID | None = None,
+    patient_id: UUID | None = None,
+    skip: int = 0,
+    limit: int = 100,
+):
+    query = db.query(models.Review)
+    if doctor_id:
+        query = query.filter(models.Review.doctor_id == doctor_id)
+    if patient_id:
+        query = query.filter(models.Review.patient_id == patient_id)
+    return query.order_by(models.Review.created_at.desc()).offset(skip).limit(limit).all()
+
+
+def delete_review(db: Session, review: models.Review):
+    db.delete(review)
+    db.commit()
