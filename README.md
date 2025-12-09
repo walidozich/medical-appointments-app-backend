@@ -12,6 +12,7 @@ Backend for a medical appointments management app, aligned to the project specif
 - Billing/Insurance: billing entries linked to appointments/patients, insurance policies, claims.
 - Chat: threads, lifecycle (open/closed), per-user archive, messages, read receipts, attachments (png/jpg/pdf up to 10MB), WebSocket real-time delivery, notifications on thread creation/message sent/message read.
 - Notifications: in-app notifications with filters, mark-read, mark-all-read, delete, plus WebSocket stream for live updates; chat events auto-generate notifications.
+- Admin dashboard APIs: manage users, specialties, doctor reviews (moderation), and reporting summary metrics.
 - API envelope: standardized `{success, data, message}` responses; centralized exception handling.
 
 ## Project Structure
@@ -73,7 +74,11 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
   - `POST /auth/forgot` / `POST /auth/reset` — password reset flows.
 - Users:
   - `GET /users/me` — current user info.
-  - `GET/POST/PATCH/DELETE /users` — admin user management.
+  - `PATCH /users/me` — update current user (no role changes).
+  - `GET /users` — list users (admin).
+  - `POST /users` — create user with role/flags (admin).
+  - `GET /users/{id}` — get user by id (admin).
+  - `PATCH /users/{id}` — update user (admin).
 - Patients:
   - `GET/POST/PATCH /patients/me` — manage your patient profile.
   - `GET/POST/PATCH/DELETE /patients` — admin management.
@@ -83,8 +88,10 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
   - `GET/POST/PATCH/DELETE /doctors/{id}` — admin CRUD.
   - `GET/POST/PATCH/DELETE /doctors/{id}/availability` — manage time slots.
   - `GET /doctors/{id}/availability/slots` — calendar-friendly available slots.
+  - Specialties (admin): `GET/POST /doctors/specialties`, `PATCH/DELETE /doctors/specialties/{id}`.
   - Favorites: `POST/DELETE /doctors/{id}/favorite`, `GET /doctors/me/favorites`.
   - Reviews: `GET/POST /doctors/{id}/reviews`.
+  - Review moderation (admin): `GET /doctors/admin/reviews` with filters, `DELETE /doctors/admin/reviews/{id}`.
 - Appointments:
   - `POST /appointments` — book.
   - `GET /appointments/me` — patient view.
@@ -117,6 +124,8 @@ Requires network access to the configured Postgres (`DATABASE_URL` in `.env`).
   - `PATCH /notifications/read-all` — mark all read.
   - `DELETE /notifications/{id}` — delete.
   - WebSocket stream: `ws://.../api/v1/notifications/ws?token=<access-token>` (polling push for new notifications).
+- Admin:
+  - `GET /admin/reports/summary` — dashboard summary (users, profiles, appointments, billing).
 
 ### WebSockets note
 - WebSocket routes are implemented but intentionally absent from Swagger/OpenAPI (OpenAPI documents HTTP only).
